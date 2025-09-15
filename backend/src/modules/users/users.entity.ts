@@ -1,0 +1,27 @@
+import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Role } from '../roles/roles.entity';
+
+@Entity('users')
+export class User {
+  @PrimaryGeneratedColumn()
+  id: number;
+
+  @Column({ type: 'varchar', length: 100, unique: true, nullable: false })
+  username: string;
+
+  @Column({ type: 'varchar', length: 150, unique: true, nullable: false })
+  email: string;
+
+  @Column({ type: 'varchar', length: 200, nullable: false })
+  password: string;
+
+  @Column({ type: 'text', nullable: true })
+  avatar_url: string;
+
+  @Column({ type: 'integer', nullable: true })
+  role_id: number;
+
+  @ManyToOne(() => Role, { nullable: true })
+  @JoinColumn({ name: 'role_id' })
+  role: Role;
+}
