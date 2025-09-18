@@ -4,6 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { DatabaseService } from './database.service';
+import { UsersModule } from './modules/users/users.module';
+import { RolesModule } from './modules/roles/roles.module';
 
 @Module({
   imports: [
@@ -24,6 +26,10 @@ import { DatabaseService } from './database.service';
       }),
       inject: [ConfigService],
     }),
+    
+    // Feature modules
+    RolesModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [AppService, DatabaseService],
