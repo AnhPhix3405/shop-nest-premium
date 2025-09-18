@@ -8,7 +8,12 @@ async function bootstrap() {
   
   // Enable CORS for frontend
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:3001'], // Next.js và dev servers
+    origin: [
+      'http://localhost:3000', 
+      'http://localhost:3001',
+      'https://shop-nest-premium.onrender.com',
+      // Add your frontend domain here when deployed
+    ],
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
@@ -24,10 +29,13 @@ async function bootstrap() {
     transform: true, // Auto transform payloads
   }));
   
-  const port = process.env.PORT ?? 4000; // Đổi thành 4000 để tránh conflict với Next.js
-  await app.listen(port);
+  const port = process.env.PORT || 10000; // Use PORT from environment or default to 10000
+  const host = process.env.NODE_ENV === 'production' ? '0.0.0.0' : 'localhost';
   
-  console.log(`🚀 Backend API server running on http://localhost:${port}/api`);
-  console.log(`📚 Users API available at http://localhost:${port}/api/users`);
+  await app.listen(port, host);
+  
+  console.log(`🚀 Backend API server running on http://${host}:${port}/api`);
+  console.log(`📚 Users API available at http://${host}:${port}/api/users`);
+  console.log(`📦 Environment: ${process.env.NODE_ENV || 'development'}`);
 }
 bootstrap();
