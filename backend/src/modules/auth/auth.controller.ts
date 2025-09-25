@@ -9,6 +9,7 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { Public } from './decorators/public.decorator';
 
 @Controller('auth')
 export class AuthController {
@@ -18,6 +19,7 @@ export class AuthController {
    * Login endpoint
    * POST /auth/login
    */
+  @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   async login(@Body() loginDto: LoginDto): Promise<LoginResponseDto> {
@@ -28,6 +30,7 @@ export class AuthController {
    * Refresh token endpoint
    * POST /auth/refresh
    */
+  @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
   async refreshToken(

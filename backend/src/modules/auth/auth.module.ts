@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
@@ -7,6 +7,8 @@ import { AuthService } from './auth.service';
 import { TokensService } from './tokens.service';
 import { RefreshToken } from './refresh-token.entity';
 import { UsersModule } from '../users/users.module';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { RolesGuard } from './guards/roles.guard';
 
 @Module({
   imports: [
@@ -22,10 +24,10 @@ import { UsersModule } from '../users/users.module';
       }),
       inject: [ConfigService],
     }),
-    UsersModule,
+    forwardRef(() => UsersModule),
   ],
   controllers: [AuthController],
-  providers: [AuthService, TokensService],
-  exports: [AuthService, TokensService, JwtModule],
+  providers: [AuthService, TokensService, JwtAuthGuard, RolesGuard],
+  exports: [AuthService, TokensService, JwtModule, JwtAuthGuard, RolesGuard],
 })
 export class AuthModule {}
