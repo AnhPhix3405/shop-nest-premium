@@ -6,6 +6,7 @@ import { AppService } from './app.service';
 import { DatabaseService } from './database.service';
 import { UsersModule } from './modules/users/users.module';
 import { RolesModule } from './modules/roles/roles.module';
+import { AuthModule } from './modules/auth/auth.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { RolesModule } from './modules/roles/roles.module';
     // Feature modules
     RolesModule,
     UsersModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService, DatabaseService],

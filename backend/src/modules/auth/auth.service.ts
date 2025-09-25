@@ -1,144 +1,134 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-/* eslint-disable @typescript-eslint/no-unused-vars */
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { JwtService } from '@nestjs/jwt';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { UsersService } from '../users/users.service';
-import { RefreshToken } from './refresh-token.entity';
-import * as bcrypt from 'bcryptjs';
-
-export interface LoginPayload {
-  email: string;
-  password: string;
-}
-
-export interface JwtPayload {
-  sub: number;
-  email: string;
-  username: string;
-  role_id: number;
-}
-
-export interface AuthTokens {
-  access_token: string;
-  refresh_token: string;
-}
+import { TokensService } from './tokens.service';
+import { LoginDto } from './dto/login.dto';
+import { LoginResponseDto } from './dto/login-response.dto';
+import { User } from '../users/users.entity';
 
 @Injectable()
 export class AuthService {
   constructor(
-    private usersService: UsersService,
-    private jwtService: JwtService,
-    @InjectRepository(RefreshToken)
-    private refreshTokenRepository: Repository<RefreshToken>,
+    private readonly usersService: UsersService,
+    private readonly tokensService: TokensService,
   ) {}
 
-  async validateUser(email: string, password: string) {
-    const user = await this.usersService.findByEmail(email);
-    
-    if (user && await bcrypt.compare(password, user.password)) {
-      const { password, ...result } = user;
-      return result;
-    }
-    return null;
-  }
+  /**
+   * Authenticate user and generate tokens
+   */
+  async login(loginDto: LoginDto): Promise<LoginResponseDto> {
+    const { identifier, password } = loginDto;
 
-  async login(loginPayload: LoginPayload): Promise<AuthTokens> {
-    const user = await this.validateUser(loginPayload.email, loginPayload.password);
+    // Find user by email or username
+    let user: User | null = null;
     
+    // Try to find by email first
+    if (identifier.includes('@')) {
+      user = await this.usersService.findByEmail(identifier);
+    } else {
+      // Try to find by username
+      user = await this.usersService.findByUsername(identifier);
+    }
+
+    // If not found by first method, try the other method
+    if (!user) {
+      if (identifier.includes('@')) {
+        user = await this.usersService.findByUsername(identifier);
+      } else {
+        user = await this.usersService.findByEmail(identifier);
+      }
+    }
+
     if (!user) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const payload: JwtPayload = {
-      sub: user.id,
-      email: user.email,
-      username: user.username,
-      role_id: user.role_id,
+    // Validate password
+    const isPasswordValid = await this.usersService.validatePassword(password, user.password);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    // Generate tokens
+    const accessToken = this.tokensService.generateAccessToken(user);
+    const refreshToken = await this.tokensService.generateRefreshToken(user);
+
+    // Prepare response
+    const response: LoginResponseDto = {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        avatar_url: user.avatar_url || '',
+        role: {
+          id: user.role?.id || 0,
+          name: user.role?.name || 'customer',
+        },
+      },
+      expires_in: this.tokensService.getAccessTokenExpiresIn(),
     };
 
-    const access_token = this.jwtService.sign(payload);
-    const refresh_token = this.jwtService.sign(payload, { 
-      expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' 
-    });
-
-    // Save refresh token to database
-    await this.saveRefreshToken(user.id, refresh_token);
-
-    return {
-      access_token,
-      refresh_token,
-    };
+    return response;
   }
 
-  async refreshToken(refreshToken: string): Promise<AuthTokens> {
+  /**
+   * Refresh access token using refresh token
+   */
+  async refreshToken(refreshToken: string): Promise<{ access_token: string; expires_in: number }> {
     try {
-      const payload = this.jwtService.verify(refreshToken);
+      // Verify refresh token
+      const payload = await this.tokensService.verifyRefreshToken(refreshToken);
+      
+      // Get user by ID from payload
       const user = await this.usersService.findOne(payload.sub);
-
-      if (!user) {
-        throw new UnauthorizedException('Invalid refresh token');
-      }
-
-      // Check if refresh token exists and is active in database
-      const tokenRecord = await this.refreshTokenRepository.findOne({
-        where: { token: refreshToken, user_id: user.id, is_active: true },
-      });
-
-      if (!tokenRecord || tokenRecord.expires_at < new Date()) {
-        throw new UnauthorizedException('Invalid or expired refresh token');
-      }
-
-      const newPayload: JwtPayload = {
-        sub: user.id,
-        email: user.email,
-        username: user.username,
-        role_id: user.role_id,
-      };
-
-      const access_token = this.jwtService.sign(newPayload);
-      const new_refresh_token = this.jwtService.sign(newPayload, { 
-        expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' 
-      });
-
-      // Deactivate old refresh token
-      await this.refreshTokenRepository.update(tokenRecord.id, { is_active: false });
-
-      // Save new refresh token
-      await this.saveRefreshToken(user.id, new_refresh_token);
-
+      
+      // Generate new access token
+      const newAccessToken = this.tokensService.generateAccessToken(user);
+      
       return {
-        access_token,
-        refresh_token: new_refresh_token,
+        access_token: newAccessToken,
+        expires_in: this.tokensService.getAccessTokenExpiresIn(),
       };
-    } catch (error) {
+    } catch {
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
 
-  async logout(refreshToken: string): Promise<void> {
-    await this.refreshTokenRepository.update(
-      { token: refreshToken },
-      { is_active: false }
-    );
+  /**
+   * Logout user by revoking refresh token
+   */
+  async logout(refreshToken: string): Promise<{ message: string }> {
+    try {
+      await this.tokensService.revokeRefreshToken(refreshToken);
+      return { message: 'Logged out successfully' };
+    } catch {
+      throw new BadRequestException('Invalid refresh token');
+    }
   }
 
-  private async saveRefreshToken(userId: number, token: string): Promise<void> {
-    const expiresAt = new Date();
-    const expiresInDays = parseInt(process.env.JWT_REFRESH_EXPIRES_IN?.replace('d', '') || '7');
-    expiresAt.setDate(expiresAt.getDate() + expiresInDays);
+  /**
+   * Logout from all devices by revoking all refresh tokens
+   */
+  async logoutAll(userId: number): Promise<{ message: string }> {
+    try {
+      await this.tokensService.revokeAllRefreshTokens(userId);
+      return { message: 'Logged out from all devices successfully' };
+    } catch {
+      throw new BadRequestException('Failed to logout from all devices');
+    }
+  }
 
-    const refreshToken = this.refreshTokenRepository.create({
-      token,
-      user_id: userId,
-      expires_at: expiresAt,
-      is_active: true,
-    });
-
-    await this.refreshTokenRepository.save(refreshToken);
+  /**
+   * Validate user from access token
+   */
+  async validateUser(accessToken: string): Promise<User> {
+    try {
+      const payload = this.tokensService.verifyAccessToken(accessToken);
+      const user = await this.usersService.findOne(payload.sub);
+      return user;
+    } catch {
+      throw new UnauthorizedException('Invalid access token');
+    }
   }
 }
