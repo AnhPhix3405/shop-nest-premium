@@ -1,12 +1,9 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { UsersRepository } from './users.repository';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
+import { RegisterUserDto } from './dto/register-user.dto';
 import { User } from './users.entity';
 
 @Injectable()
@@ -35,6 +32,36 @@ export class UsersService {
       ...createUserDto,
       password: hashedPassword,
       is_verified: createUserDto.is_verified ?? false, // Default to false if not provided
+    };
+
+    return await this.usersRepository.create(userWithHashedPassword);
+  }
+
+  async register(registerUserDto: RegisterUserDto): Promise<User> {
+    // Kiểm tra email đã tồn tại
+    const existingUserByEmail = await this.usersRepository.findByEmail(registerUserDto.email);
+    if (existingUserByEmail) {
+      throw new ConflictException('Email already exists');
+    }
+
+    // Kiểm tra username đã tồn tại
+    const existingUserByUsername = await this.usersRepository.findByUsername(registerUserDto.username);
+    if (existingUserByUsername) {
+      throw new ConflictException('Username already exists');
+    }
+
+    // Hash password
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(registerUserDto.password, saltRounds);
+
+    // Tạo user với password đã hash, role_id mặc định là 4 (customer), và is_verified = false
+    const userWithHashedPassword = {
+      username: registerUserDto.username,
+      email: registerUserDto.email,
+      password: hashedPassword,
+      avatar_url: registerUserDto.avatar_url,
+      role_id: registerUserDto.role_id || 4, // Default to customer (4)
+      is_verified: false, // Always false for registration
     };
 
     return await this.usersRepository.create(userWithHashedPassword);

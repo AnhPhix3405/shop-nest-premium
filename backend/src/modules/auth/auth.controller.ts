@@ -9,11 +9,24 @@ import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { RegisterUserDto } from '../users/dto/register-user.dto';
+import { User } from '../users/users.entity';
 import { Public } from './decorators/public.decorator';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
+
+  /**
+   * Register endpoint - Chỉ tạo được customer (role_id: 4) hoặc seller (role_id: 3)
+   * POST /auth/register
+   */
+  @Public()
+  @Post('register')
+  @HttpCode(HttpStatus.CREATED)
+  async register(@Body() registerUserDto: RegisterUserDto): Promise<User> {
+    return await this.authService.register(registerUserDto);
+  }
 
   /**
    * Login endpoint

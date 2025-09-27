@@ -3,6 +3,7 @@ import { UsersService } from '../users/users.service';
 import { TokensService } from './tokens.service';
 import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
+import { RegisterUserDto } from '../users/dto/register-user.dto';
 import { User } from '../users/users.entity';
 
 @Injectable()
@@ -11,6 +12,13 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly tokensService: TokensService,
   ) {}
+
+  /**
+   * Register new user - Chỉ tạo được customer (role_id: 4) hoặc seller (role_id: 3)
+   */
+  async register(registerUserDto: RegisterUserDto): Promise<User> {
+    return await this.usersService.register(registerUserDto);
+  }
 
   /**
    * Authenticate user and generate tokens
