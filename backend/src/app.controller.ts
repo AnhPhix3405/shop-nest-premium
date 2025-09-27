@@ -13,9 +13,4 @@ export class AppController {
   getHello(): string {
     return this.appService.getHello();
   }
-
-  @Get('users')
-  async getAllUsers(): Promise<any[]> {
-    return await this.databaseService.getAllUsers();
-  }
 }
