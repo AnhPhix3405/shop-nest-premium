@@ -122,4 +122,24 @@ export class UsersController {
   ): Promise<void> {
     await this.usersService.remove(id);
   }
+
+  @Patch(':id/verify')
+  @UseGuards(RolesGuard)
+  @Roles('admin') // Chỉ admin mới được verify user
+  async verifyUser(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() currentUser: User
+  ): Promise<User> {
+    return await this.usersService.verifyUser(id);
+  }
+
+  @Patch(':id/unverify')
+  @UseGuards(RolesGuard)
+  @Roles('admin') // Chỉ admin mới được unverify user
+  async unverifyUser(
+    @Param('id', ParseIntPipe) id: number,
+    @CurrentUser() currentUser: User
+  ): Promise<User> {
+    return await this.usersService.unverifyUser(id);
+  }
 }

@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-call */
-import { IsEmail, IsNotEmpty, IsString, IsOptional, IsNumber, MinLength } from 'class-validator';
+import { IsEmail, IsNotEmpty, IsString, IsOptional, IsNumber, IsBoolean, MinLength } from 'class-validator';
 
 export class CreateUserDto {
   @IsString()
@@ -22,4 +22,8 @@ export class CreateUserDto {
   @IsOptional()
   @IsNumber()
   role_id?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  is_verified?: boolean;
 }

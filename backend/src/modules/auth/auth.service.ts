@@ -61,6 +61,7 @@ export class AuthService {
         username: user.username,
         email: user.email,
         avatar_url: user.avatar_url || '',
+        is_verified: user.is_verified,
         role: {
           id: user.role?.id || 0,
           name: user.role?.name || 'customer',

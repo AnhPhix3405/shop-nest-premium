@@ -6,6 +6,7 @@ export class LoginResponseDto {
     username: string;
     email: string;
     avatar_url: string;
+    is_verified: boolean;
     role: {
       id: number;
       name: string;
@@ -20,6 +21,7 @@ export interface JwtPayload {
   email: string;
   role: string;
   roleId: number;
+  is_verified: boolean;
   iat?: number;
   exp?: number;
 }

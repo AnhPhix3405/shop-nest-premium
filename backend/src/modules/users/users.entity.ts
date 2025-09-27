@@ -21,6 +21,9 @@ export class User {
   @Column({ type: 'integer', nullable: true })
   role_id: number;
 
+  @Column({ type: 'boolean', default: false })
+  is_verified: boolean;
+
   @ManyToOne(() => Role, { nullable: true })
   @JoinColumn({ name: 'role_id' })
   role: Role;

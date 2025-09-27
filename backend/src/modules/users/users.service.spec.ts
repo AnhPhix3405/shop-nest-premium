@@ -32,6 +32,7 @@ describe('UsersService', () => {
     avatar_url: 'https://example.com/avatar.jpg',
     role_id: 1,
     role: mockRole,
+    is_verified: false,
   };
 
   const mockRepository = {

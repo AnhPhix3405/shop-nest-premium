@@ -30,10 +30,11 @@ export class UsersService {
     const saltRounds = 10;
     const hashedPassword = await bcrypt.hash(createUserDto.password, saltRounds);
 
-    // Tạo user với password đã hash
+    // Tạo user với password đã hash và set default is_verified
     const userWithHashedPassword = {
       ...createUserDto,
       password: hashedPassword,
+      is_verified: createUserDto.is_verified ?? false, // Default to false if not provided
     };
 
     return await this.usersRepository.create(userWithHashedPassword);
@@ -108,5 +109,23 @@ export class UsersService {
 
   async validatePassword(plainPassword: string, hashedPassword: string): Promise<boolean> {
     return await bcrypt.compare(plainPassword, hashedPassword);
+  }
+
+  async verifyUser(userId: number): Promise<User> {
+    const user = await this.findOne(userId);
+    if (user.is_verified) {
+      throw new ConflictException('User is already verified');
+    }
+
+    return await this.update(userId, { is_verified: true });
+  }
+
+  async unverifyUser(userId: number): Promise<User> {
+    const user = await this.findOne(userId);
+    if (!user.is_verified) {
+      throw new ConflictException('User is already unverified');
+    }
+
+    return await this.update(userId, { is_verified: false });
   }
 }

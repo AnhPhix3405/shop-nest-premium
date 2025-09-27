@@ -26,6 +26,7 @@ export class TokensService {
       email: user.email,
       role: user.role?.name || 'customer',
       roleId: user.role?.id || 0,
+      is_verified: user.is_verified,
     };
 
     return this.jwtService.sign(payload, {
