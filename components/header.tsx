@@ -2,6 +2,7 @@ import { Search, ShoppingCart, Bell, User } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
+import Link from "next/link"
 
 export function Header() {
   return (
@@ -18,8 +19,12 @@ export function Header() {
             <span>Thông báo</span>
             <span>Hỗ trợ</span>
             <span>Tiếng Việt</span>
-            <span>Đăng ký</span>
-            <span>Đăng nhập</span>
+            <Link href="/register" className="hover:text-primary-foreground/80 transition-colors cursor-pointer">
+              Đăng ký
+            </Link>
+            <Link href="/login" className="hover:text-primary-foreground/80 transition-colors cursor-pointer">
+              Đăng nhập
+            </Link>
           </div>
         </div>
 
