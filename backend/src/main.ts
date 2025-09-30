@@ -6,17 +6,23 @@ import { ValidationPipe } from '@nestjs/common';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  // Enable CORS for frontend
+  // Enable CORS for frontend with environment-based origins
+  const allowedOrigins = process.env.ALLOWED_ORIGINS 
+    ? process.env.ALLOWED_ORIGINS.split(',')
+    : [
+        'http://localhost:3000', 
+        'http://localhost:3001',
+        'https://shop-nest-premium.onrender.com',
+        'https://shop-nest-premium.vercel.app',
+      ];
+
   app.enableCors({
-    origin: [
-      'http://localhost:3000', 
-      'http://localhost:3001',
-      'https://shop-nest-premium.onrender.com',
-      // Add your frontend domain here when deployed
-    ],
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    origin: allowedOrigins,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin'],
     credentials: true,
+    preflightContinue: false,
+    optionsSuccessStatus: 204,
   });
   
   // Set global API prefix
