@@ -7,9 +7,14 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
+import { buildEndpoint, API_BASE_URL } from '@/config/api';
+import { useUserStore } from '@/lib/store/userStore';
 
 export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const { login } = useUserStore();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-12 px-4 sm:px-6 lg:px-8">
@@ -25,7 +30,40 @@ export default function LoginPage() {
         </CardHeader>
         
         <CardContent>
-          <form className="space-y-4">
+          <form onSubmit={async (e) => {
+            e.preventDefault();
+            
+            try {
+              const response = await fetch(`${API_BASE_URL}${buildEndpoint.auth.login()}`, {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                  identifier: email,
+                  password,
+                }),
+              });
+
+              const data = await response.json();
+              console.log('Backend response:', data);
+              
+              if (response.ok && data.user) {
+                // Lưu user data vào Zustand store
+                login({
+                  access_token: data.access_token,
+                  avatar_url: data.user.avatar_url || '',
+                  email: data.user.email,
+                  is_verified: data.user.is_verified,
+                  role: data.user.role.name,
+                  username: data.user.username,
+                });
+              }
+              
+            } catch (error) {
+              console.log('Error:', error);
+            }
+          }} className="space-y-4">
             {/* Email Field */}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -36,6 +74,8 @@ export default function LoginPage() {
                   type="email"
                   placeholder="Enter your email"
                   className="pl-10"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
             </div>
@@ -50,6 +90,8 @@ export default function LoginPage() {
                   type={showPassword ? 'text' : 'password'}
                   placeholder="Enter your password"
                   className="pl-10 pr-10"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
                 />
                 <button
                   type="button"
