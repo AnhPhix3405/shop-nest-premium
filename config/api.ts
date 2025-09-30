@@ -1,6 +1,6 @@
 // API Endpoints Configuration for ShopNest
-// export const API_BASE_URL = 'https://shop-nest-premium.onrender.com/api';
-export const API_BASE_URL = 'http://localhost:4000/api';
+export const API_BASE_URL = 'https://shop-nest-premium.onrender.com/api';
+// export const API_BASE_URL = 'http://localhost:4000/api';
 
 // ===== AUTH ENDPOINTS =====
 export const AUTH_ENDPOINTS = {
