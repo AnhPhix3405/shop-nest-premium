@@ -59,11 +59,10 @@ export class TokensService {
    * Save refresh token to database
    */
   private async saveRefreshToken(userId: number, token: string): Promise<void> {
-    // Deactivate old refresh tokens for this user
-    await this.refreshTokenRepository.update(
-      { user_id: userId, is_active: true },
-      { is_active: false }
-    );
+    // Delete all old refresh tokens for this user (both active and inactive)
+    await this.refreshTokenRepository.delete({
+      user_id: userId
+    });
 
     // Calculate expiration date
     const expiresIn = this.configService.get<number>('JWT_REFRESH_EXPIRES_IN_SECONDS') || 7 * 24 * 60 * 60; // 7 days in seconds
