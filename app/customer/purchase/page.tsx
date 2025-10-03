@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useAppSelector } from '@/lib/hooks/redux';
 import { CustomerSidebar } from '@/components/customer/sidebar';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -193,6 +194,22 @@ const formatCurrency = (amount: number) => {
 export default function PurchasePage() {
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const { user } = useAppSelector(state => state.auth);
+
+  // Check if no user or user role is not customer
+  if (!user || user.role !== 'customer') {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center p-8 max-w-md">
+          <div className="text-9xl font-bold text-gray-300 mb-4">404</div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">Page Not Found</h1>
+          <p className="text-gray-600 text-lg">
+            This is not the web page you are looking for
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Lọc orders theo tab và search
   const filteredOrders = mockOrders.filter(order => {
