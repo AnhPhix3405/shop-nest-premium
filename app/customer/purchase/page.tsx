@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
-import F404 from '@/components/errors/F404';
+import UserValidate from '../userValidate';
 import { 
   ShoppingBag, 
   Clock, 
@@ -192,17 +192,9 @@ const formatCurrency = (amount: number) => {
   }).format(amount);
 };
 
-export default function PurchasePage() {
+function PurchasePageContent() {
   const [activeTab, setActiveTab] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
-  const { user } = useAppSelector(state => state.auth);
-
-  // Check if no user or user role is not customer
-  if (!user || user.role !== 'customer') {
-    return (
-      <F404/>
-    );
-  }
 
   // Lọc orders theo tab và search
   const filteredOrders = mockOrders.filter(order => {
@@ -458,5 +450,13 @@ export default function PurchasePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function PurchasePage() {
+  return (
+    <UserValidate allowedRoles={['customer']} requireAuth={true}>
+      <PurchasePageContent />
+    </UserValidate>
   );
 }
