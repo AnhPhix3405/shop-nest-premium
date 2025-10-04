@@ -9,6 +9,7 @@ import { RolesModule } from './modules/roles/roles.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ProtectedModule } from './modules/protected/protected.module';
 import { CorsMiddleware } from './middleware/cors.middleware';
+import { RedisModule } from './modules/redis/redis.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { CorsMiddleware } from './middleware/cors.middleware';
     }),
     
     // Feature modules
+    RedisModule,
     RolesModule,
     UsersModule,
     AuthModule,
