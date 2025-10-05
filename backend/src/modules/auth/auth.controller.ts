@@ -10,12 +10,18 @@ import { LoginDto } from './dto/login.dto';
 import { LoginResponseDto } from './dto/login-response.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { RegisterUserDto } from '../users/dto/register-user.dto';
+import { SendOtpDto } from './dto/send-otp.dto';
+import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { User } from '../users/users.entity';
 import { Public } from './decorators/public.decorator';
+import { MailService } from '../mail/mail.service';
 
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+  constructor(
+    private readonly authService: AuthService,
+    private readonly mailService: MailService,
+  ) {}
 
   /**
    * Register endpoint - Chỉ tạo được customer (role_id: 4) hoặc seller (role_id: 3)
@@ -74,5 +80,34 @@ export class AuthController {
     @Body('user_id') userId: number,
   ): Promise<{ message: string }> {
     return await this.authService.logoutAll(userId);
+  }
+
+  /**
+   * Send OTP endpoint - Gửi mã OTP 6 số đến email
+   * POST /auth/send-otp
+   */
+  @Public()
+  @Post('send-otp')
+  @HttpCode(HttpStatus.OK)
+  async sendOtp(@Body() sendOtpDto: SendOtpDto): Promise<{
+    success: boolean;
+    message: string;
+    waitTime?: number;
+  }> {
+    return await this.mailService.sendOTP(sendOtpDto.email);
+  }
+
+  /**
+   * Verify OTP endpoint - Xác minh mã OTP
+   * POST /auth/verify-otp
+   */
+  @Public()
+  @Post('verify-otp')
+  @HttpCode(HttpStatus.OK)
+  async verifyOtp(@Body() verifyOtpDto: VerifyOtpDto): Promise<{
+    success: boolean;
+    message: string;
+  }> {
+    return await this.mailService.verifyOTP(verifyOtpDto.email, verifyOtpDto.code);
   }
 }

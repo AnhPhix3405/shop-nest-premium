@@ -7,6 +7,7 @@ import { AuthService } from './auth.service';
 import { TokensService } from './tokens.service';
 import { RefreshToken } from './refresh-token.entity';
 import { UsersModule } from '../users/users.module';
+import { MailModule } from '../mail/mail.module';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 
@@ -25,6 +26,7 @@ import { RolesGuard } from './guards/roles.guard';
       inject: [ConfigService],
     }),
     forwardRef(() => UsersModule),
+    MailModule,
   ],
   controllers: [AuthController],
   providers: [AuthService, TokensService, JwtAuthGuard, RolesGuard],

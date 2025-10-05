@@ -45,6 +45,65 @@ export class RedisService implements OnModuleDestroy {
     return this.redisClient.del(key);
   }
 
+  // Lấy TTL của key (thời gian sống còn lại)
+  async getTTL(key: string): Promise<number> {
+    return this.redisClient.ttl(key);
+  }
+
+  // Đặt TTL cho key đã tồn tại
+  async expire(key: string, ttlInSeconds: number): Promise<boolean> {
+    const result = await this.redisClient.expire(key, ttlInSeconds);
+    return result === 1;
+  }
+
+  // Tăng giá trị counter
+  async incr(key: string): Promise<number> {
+    return this.redisClient.incr(key);
+  }
+
+  // ==================== OTP METHODS ====================
+
+  /**
+   * Lưu OTP với TTL
+   * @param email - Email người dùng
+   * @param otp - Mã OTP
+   * @param ttlInSeconds - Thời gian sống (mặc định 60s = 1 phút)
+   */
+  async setOTP(email: string, otp: string, ttlInSeconds: number = 60): Promise<void> {
+    const key = `otp:${email}`;
+    const otpData = {
+      code: otp,
+      createdAt: new Date().toISOString()
+    };
+    await this.set(key, JSON.stringify(otpData), ttlInSeconds);
+  }
+
+  /**
+   * Lấy OTP theo email
+   * @param email - Email người dùng
+   * @returns Object chứa OTP và thời gian tạo, hoặc null nếu không tồn tại
+   */
+  async getOTP(email: string): Promise<{ code: string; createdAt: string } | null> {
+    const key = `otp:${email}`;
+    const data = await this.get(key);
+    if (!data) return null;
+    
+    try {
+      return JSON.parse(data);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Xóa OTP sau khi đã sử dụng
+   * @param email - Email người dùng
+   */
+  async deleteOTP(email: string): Promise<void> {
+    const key = `otp:${email}`;
+    await this.del(key);
+  }
+
   // Test Redis connection
   async ping(): Promise<string> {
     return this.redisClient.ping();
