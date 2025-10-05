@@ -95,7 +95,7 @@ export class MailService {
 
       // 6. Gửi email thật
       const fromName = this.configService.get<string>('MAIL_FROM_NAME', 'ShopNest Support');
-      const fromEmail = this.configService.get<string>('MAIL_USER');
+      const fromEmail = this.configService.get<string>('MAIL_FROM');
       
       const mailOptions = {
         from: `"${fromName}" <${fromEmail}>`,
