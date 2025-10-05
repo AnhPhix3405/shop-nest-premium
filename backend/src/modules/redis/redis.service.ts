@@ -1,7 +1,7 @@
-/* eslint-disable @typescript-eslint/require-await */
+/* eslint-disable @typescript-eslint/no-unnecessary-type-assertion */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
 // src/redis/redis.service.ts
 import { Injectable, OnModuleDestroy } from '@nestjs/common';
@@ -13,15 +13,70 @@ export class RedisService implements OnModuleDestroy {
   private readonly redisClient: Redis;
 
   constructor(private configService: ConfigService) {
-    this.redisClient = new Redis({
-      host: this.configService.get<string>('redis.host'),
-      port: this.configService.get<number>('redis.port'),
-      password: this.configService.get<string>('redis.password'),
-      db: this.configService.get<number>('redis.db'),
+    // Kiểm tra xem có sử dụng Redis Cloud không
+    const useRedisCloud = this.configService.get<string>('REDIS_CLOUD_HOST');
+    
+    let redisConfig: any;
+    
+    if (useRedisCloud) {
+      // Cấu hình Redis Cloud theo format mới
+      console.log('🌐 Using Redis Cloud configuration');
+      redisConfig = {
+        username: this.configService.get<string>('redis.username'),
+        password: this.configService.get<string>('redis.password'),
+        host: this.configService.get<string>('redis.socket.host'),
+        port: this.configService.get<number>('redis.socket.port'),
+        db: this.configService.get<number>('redis.db'),
+        connectTimeout: this.configService.get<number>('redis.connectTimeout', 30000),
+        lazyConnect: this.configService.get<boolean>('redis.lazyConnect', true),
+        maxRetriesPerRequest: this.configService.get<number>('redis.maxRetriesPerRequest', 3),
+        retryDelayOnFailover: this.configService.get<number>('redis.retryDelayOnFailover', 100),
+        enableReadyCheck: this.configService.get<boolean>('redis.enableReadyCheck', true),
+        keepAlive: this.configService.get<number>('redis.socket.keepAlive', 30000),
+      };
+
+      // Thêm TLS nếu được cấu hình
+      const tlsConfig = this.configService.get('redis.tls');
+      if (tlsConfig) {
+        redisConfig.tls = tlsConfig;
+      }
+    } else {
+      // Cấu hình Redis Local (fallback cho development)
+      console.log('🏠 Using Local Redis configuration');
+      redisConfig = {
+        host: this.configService.get<string>('REDIS_HOST', 'localhost'),
+        port: this.configService.get<number>('REDIS_PORT', 6379),
+        password: this.configService.get<string>('REDIS_PASSWORD') || undefined,
+        db: this.configService.get<number>('REDIS_DB', 0),
+        connectTimeout: 10000,
+        lazyConnect: true,
+        maxRetriesPerRequest: 3,
+        retryDelayOnFailover: 100,
+        enableReadyCheck: true,
+        keepAlive: 30000,
+      };
+    }
+
+    this.redisClient = new Redis(redisConfig as any);
+
+    this.redisClient.on('connect', () => {
+      console.log('✅ Redis Cloud connected successfully');
+    });
+
+    this.redisClient.on('ready', () => {
+      console.log('🚀 Redis Cloud ready to receive commands');
     });
 
     this.redisClient.on('error', (err) => {
-      console.error('Redis Client Error:', err);
+      console.error('❌ Redis Cloud Client Error:', err);
+    });
+
+    this.redisClient.on('close', () => {
+      console.log('🔌 Redis Cloud connection closed');
+    });
+
+    this.redisClient.on('reconnecting', () => {
+      console.log('🔄 Redis Cloud reconnecting...');
     });
   }
 
@@ -29,7 +84,6 @@ export class RedisService implements OnModuleDestroy {
     this.redisClient.disconnect();
   }
 
-  // eslint-disable-next-line @typescript-eslint/require-await
   async get(key: string): Promise<string | null> {
     return this.redisClient.get(key);
   }
