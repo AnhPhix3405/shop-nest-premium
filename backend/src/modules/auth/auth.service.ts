@@ -56,6 +56,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    // Check if user email is verified
+    if (!user.is_verified) {
+      throw new UnauthorizedException('Bạn chưa xác minh email. Vui lòng kiểm tra email và xác minh tài khoản trước khi đăng nhập.');
+    }
+
     // Generate tokens
     const accessToken = this.tokensService.generateAccessToken(user);
     const refreshToken = await this.tokensService.generateRefreshToken(user);

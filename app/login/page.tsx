@@ -7,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Eye, EyeOff, Mail, Lock } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Eye, EyeOff, Mail, Lock, AlertCircle, Loader2 } from 'lucide-react';
 import { buildEndpoint, API_BASE_URL } from '@/config/api';
 import { useAppDispatch } from '@/lib/hooks/redux';
 import { login as loginAction } from '@/lib/store/authSlice';
@@ -16,6 +17,8 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const dispatch = useAppDispatch();
   const router = useRouter();
 
@@ -36,6 +39,10 @@ export default function LoginPage() {
           <form onSubmit={async (e) => {
             e.preventDefault();
             
+            // Clear previous error
+            setError('');
+            setIsLoading(true);
+            
             try {
               const response = await fetch(`${API_BASE_URL}${buildEndpoint.auth.login()}`, {
                 method: 'POST',
@@ -49,7 +56,6 @@ export default function LoginPage() {
               });
 
               const data = await response.json();
-              console.log('Backend response:', data);
               
               if (response.ok && data.user) {
                 // Lưu user data vào Redux store
@@ -64,12 +70,26 @@ export default function LoginPage() {
                 
                 // Chuyển về trang chủ
                 router.push('/');
+              } else {
+                // Hiển thị lỗi từ server
+                setError(data.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
               }
               
             } catch (error) {
               console.log('Error:', error);
+              setError('Không thể kết nối đến server. Vui lòng thử lại sau.');
+            } finally {
+              setIsLoading(false);
             }
           }} className="space-y-4">
+            {/* Error Alert */}
+            {error && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
             {/* Email Field */}
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -82,6 +102,7 @@ export default function LoginPage() {
                   className="pl-10"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  disabled={isLoading}
                 />
               </div>
             </div>
@@ -98,11 +119,13 @@ export default function LoginPage() {
                   className="pl-10 pr-10"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  disabled={isLoading}
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-3 h-4 w-4 text-gray-400 hover:text-gray-600"
+                  disabled={isLoading}
                 >
                   {showPassword ? <EyeOff /> : <Eye />}
                 </button>
@@ -132,9 +155,17 @@ export default function LoginPage() {
             {/* Sign In Button */}
             <Button
               type="submit"
-              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-2.5 transition-all duration-200 transform hover:scale-[1.02] shadow-lg"
+              className="w-full bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 text-white font-semibold py-2.5 transition-all duration-200 transform hover:scale-[1.02] shadow-lg disabled:opacity-50"
+              disabled={isLoading || !email || !password}
             >
-              Sign In
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Đang đăng nhập...
+                </>
+              ) : (
+                'Sign In'
+              )}
             </Button>
 
             {/* Divider */}

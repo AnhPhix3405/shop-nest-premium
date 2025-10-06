@@ -112,11 +112,13 @@ export default function RegisterPage() {
         throw new Error(data.message || 'Registration failed');
       }
 
-      setSuccess('Registration successful! Redirecting to login...');
+      setSuccess('Registration successful! Redirecting to verification...');
       
-      // Redirect to login page after 2 seconds
+      // Redirect to verification page with email after 2 seconds
       setTimeout(() => {
-        router.push('/login');
+        if (formData.role_id === 4) { 
+          router.push(`/customer/verification?email=${encodeURIComponent(formData.email)}`);
+        }
       }, 2000);
 
     } catch (err: any) {
@@ -125,6 +127,8 @@ export default function RegisterPage() {
       setIsLoading(false);
     }
   };
+
+  
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-12 px-4 sm:px-6 lg:px-8">

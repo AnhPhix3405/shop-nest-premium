@@ -2,13 +2,15 @@
 export const API_BASE_URL = 'https://shop-nest-premium.onrender.com/api';
 // export const API_BASE_URL = 'http://localhost:4000/api';
 
-// ===== AUTH ENDPOINTS =====
+// ===== AUTH ENDPOINTS ===== 
 export const AUTH_ENDPOINTS = {
   REGISTER: '/auth/register',          // POST - Public: Register customer/seller (role_id: 3 or 4)
   LOGIN: '/auth/login',                // POST - Public: User login
   REFRESH: '/auth/refresh',            // POST - Public: Refresh access token
   LOGOUT: '/auth/logout',              // POST - Auth: Logout from current device
-  LOGOUT_ALL: '/auth/logout-all',      // POST - Auth: Logout from all devices
+  LOGOUT_ALL: '/auth/logout-all',
+  SEND_OTP: '/auth/send-otp',
+  VERIFY_OTP: '/auth/verify-otp'       // POST - Public: Send OTP to email for verification
 } as const;
 
 // ===== USER ENDPOINTS =====
@@ -35,6 +37,8 @@ export const buildEndpoint = {
     refresh: () => AUTH_ENDPOINTS.REFRESH,
     logout: () => AUTH_ENDPOINTS.LOGOUT,
     logoutAll: () => AUTH_ENDPOINTS.LOGOUT_ALL,
+    sendOTP: () => AUTH_ENDPOINTS.SEND_OTP,
+    verifyOTP: () => AUTH_ENDPOINTS.VERIFY_OTP,
   },
   
   // User endpoints
