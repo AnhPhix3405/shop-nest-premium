@@ -15,12 +15,7 @@ export default function UserValidate({
   allowedRoles = ['customer'], 
   requireAuth = true 
 }: UserValidateProps) {
-  const { user, isAuthenticated } = useAppSelector(state => state.auth);
-
-  // Kiểm tra xem user có đăng nhập không (nếu yêu cầu)
-  if (requireAuth && !isAuthenticated) {
-    return <F404 />;
-  }
+  const { user } = useAppSelector(state => state.auth);
 
   // Kiểm tra xem user có tồn tại không (nếu yêu cầu đăng nhập)
   if (requireAuth && !user) {
@@ -57,10 +52,10 @@ export function withUserValidation<T extends object>(
 
 // Hook để kiểm tra quyền trong component
 export function useUserValidation(allowedRoles: string[] = ['customer']) {
-  const { user, isAuthenticated } = useAppSelector(state => state.auth);
+  const { user } = useAppSelector(state => state.auth);
   
   const isValid = () => {
-    if (!isAuthenticated || !user) return false;
+    if (!user) return false;
     return allowedRoles.includes(user.role);
   };
   
@@ -71,6 +66,8 @@ export function useUserValidation(allowedRoles: string[] = ['customer']) {
   const hasAnyRole = (roles: string[]) => {
     return user ? roles.includes(user.role) : false;
   };
+  
+  const isAuthenticated = !!user;
   
   return {
     isValid: isValid(),

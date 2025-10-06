@@ -11,7 +11,6 @@ export interface User {
 // Auth state interface
 export interface AuthState {
   user: User | null;
-  isAuthenticated: boolean;
 }
 
 // Root state type
