@@ -8,6 +8,7 @@ import { UsersModule } from './modules/users/users.module';
 import { RolesModule } from './modules/roles/roles.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ProtectedModule } from './modules/protected/protected.module';
+import { CartsModule } from './modules/carts/carts.module';
 import { CorsMiddleware } from './middleware/cors.middleware';
 import { RedisModule } from './modules/redis/redis.module';
 
@@ -37,6 +38,7 @@ import { RedisModule } from './modules/redis/redis.module';
     UsersModule,
     AuthModule,
     ProtectedModule,
+    CartsModule,
   ],
   controllers: [AppController],
   providers: [AppService, DatabaseService],
