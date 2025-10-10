@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
-import UserValidate from '../userValidate';
+import AuthMiddleware, { RouteProtection, withAuthMiddleware } from '../customer-middleware';
 import { 
   ShoppingBag, 
   Clock, 
@@ -453,10 +453,26 @@ function PurchasePageContent() {
   );
 }
 
+// Option 1: Using RouteProtection utility (Recommended)
 export default function PurchasePage() {
   return (
-    <UserValidate allowedRoles={['customer']} requireAuth={true}>
+    <RouteProtection.CustomerOnly>
       <PurchasePageContent />
-    </UserValidate>
+    </RouteProtection.CustomerOnly>
   );
 }
+
+// Option 2: Using HOC pattern (Alternative)
+// export default withAuthMiddleware(PurchasePageContent, {
+//   allowedRoles: ['customer'],
+//   requireAuth: true
+// });
+
+// Option 3: Using AuthMiddleware directly (Verbose)
+// export default function PurchasePage() {
+//   return (
+//     <AuthMiddleware allowedRoles={['customer']} requireAuth={true}>
+//       <PurchasePageContent />
+//     </AuthMiddleware>
+//   );
+// }
