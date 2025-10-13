@@ -11,6 +11,7 @@ import { ProtectedModule } from './modules/protected/protected.module';
 import { CartsModule } from './modules/carts/carts.module';
 import { CorsMiddleware } from './middleware/cors.middleware';
 import { RedisModule } from './modules/redis/redis.module';
+import { ProductsModule } from './modules/products/products.module';
 
 @Module({
   imports: [
@@ -39,6 +40,7 @@ import { RedisModule } from './modules/redis/redis.module';
     AuthModule,
     ProtectedModule,
     CartsModule,
+    ProductsModule,
   ],
   controllers: [AppController],
   providers: [AppService, DatabaseService],
