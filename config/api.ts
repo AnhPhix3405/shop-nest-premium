@@ -28,6 +28,12 @@ export const USER_ENDPOINTS = {
   UNVERIFY: '/users',                  // PATCH - Admin only: Unverify user (/users/:id/unverify)
 } as const;
 
+export const PRODUCT_ENDPOINTS = {
+  CREATE: '/products/create',          // POST - Seller only: Create new product
+  UPDATE: '/products/update',          // PUT - Seller only: Update product (/products/:id)
+  DELETE: '/products/delete',          // DELETE - Seller only: Delete product (/products/:id)
+} as const;
+
 // ===== ENDPOINT BUILDERS =====
 export const buildEndpoint = {
   // Auth endpoints (no parameters needed)
@@ -60,12 +66,18 @@ export const buildEndpoint = {
     verify: (id: number) => `${USER_ENDPOINTS.VERIFY}/${id}/verify`,
     unverify: (id: number) => `${USER_ENDPOINTS.UNVERIFY}/${id}/unverify`,
   },
+  products: {
+    create: () => PRODUCT_ENDPOINTS.CREATE,
+    update: (id: number) => `${PRODUCT_ENDPOINTS.UPDATE}/${id}`,
+    delete: (id: number) => `${PRODUCT_ENDPOINTS.DELETE}/${id}`,
+  }
 } as const;
 
 // ===== ALL ENDPOINTS OBJECT =====
 export const API_ENDPOINTS = {
   ...AUTH_ENDPOINTS,
   ...USER_ENDPOINTS,
+  ...PRODUCT_ENDPOINTS,
   BASE_URL: API_BASE_URL,
 } as const;
 
