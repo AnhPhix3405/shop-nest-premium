@@ -24,10 +24,15 @@ import {
   singleFileOptions, 
   multipleFilesOptions 
 } from '../../middleware/multer.middleware';
+import { ProductsService } from '../products/products.service';
 
 @Controller('upload')
 @UseGuards(JwtAuthGuard)
 export class UploadController {
+
+  constructor(
+    private readonly productsService: ProductsService
+  ) {}
 
   /**
    * Validate uploaded file
@@ -124,10 +129,11 @@ export class UploadController {
   @Post('product-image')
   @HttpCode(HttpStatus.OK)
   @UseGuards(RolesGuard)
-  @Roles('seller', 'admin', 'customer')
+  @Roles('seller', 'admin')
   @UseInterceptors(FileInterceptor('image', singleFileOptions))
   async uploadProductImage(
-    @UploadedFile() file: any
+    @UploadedFile() file: any,
+    @Body('product_id') productId?: number
   ) {
     try {
       // Validate uploaded file
@@ -147,20 +153,49 @@ export class UploadController {
       // Delete temporary file from local storage
       this.cleanupTempFile(file.path);
 
+      const responseData = {
+        url: result.secure_url,
+        public_id: result.public_id,
+        width: result.width,
+        height: result.height,
+        file_info: {
+          original_name: file.originalname,
+          size: file.size,
+          mime_type: file.mimetype
+        }
+      };
+
+      // Nếu có product_id, tự động thêm ảnh vào sản phẩm
+      if (productId) {
+        try {
+          await this.productsService.addProductImage(productId, result.secure_url);
+          return {
+            success: true,
+            message: 'Upload ảnh sản phẩm thành công và đã thêm vào sản phẩm',
+            data: {
+              ...responseData,
+              product_updated: true,
+              product_id: productId
+            }
+          };
+        } catch (productError) {
+          console.error('Error adding image to product:', productError);
+          return {
+            success: true,
+            message: 'Upload ảnh thành công nhưng không thể thêm vào sản phẩm',
+            data: {
+              ...responseData,
+              product_updated: false,
+              product_error: productError.message
+            }
+          };
+        }
+      }
+
       return {
         success: true,
         message: 'Upload ảnh sản phẩm thành công',
-        data: {
-          url: result.secure_url,
-          public_id: result.public_id,
-          width: result.width,
-          height: result.height,
-          file_info: {
-            original_name: file.originalname,
-            size: file.size,
-            mime_type: file.mimetype
-          }
-        }
+        data: responseData
       };
 
     } catch (error) {
@@ -184,7 +219,8 @@ export class UploadController {
   @Roles('seller', 'admin')
   @UseInterceptors(FilesInterceptor('images', 10, multipleFilesOptions))
   async uploadProductImages(
-    @UploadedFiles() files: any[]
+    @UploadedFiles() files: any[],
+    @Body('product_id') productId?: number
   ) {
     const uploadedImages: any[] = [];
     const failedUploads: string[] = [];
@@ -227,6 +263,50 @@ export class UploadController {
         }
       }
 
+      // Nếu có product_id và có ảnh upload thành công, tự động thêm vào sản phẩm
+      if (productId && uploadedImages.length > 0) {
+        try {
+          const imageUrls: string[] = uploadedImages.map((img: any) => img.url as string);
+          
+          // Lấy ảnh hiện tại của sản phẩm
+          const existingImages = await this.productsService.getProductImages(productId);
+          const existingUrls = existingImages.map(img => img.image_url);
+          
+          // Thêm ảnh mới vào danh sách ảnh hiện tại
+          const allImageUrls = [...existingUrls, ...imageUrls];
+          
+          // Cập nhật sản phẩm với tất cả ảnh
+          await this.productsService.replaceAllProductImages(productId, allImageUrls);
+          
+          return {
+            success: uploadedImages.length > 0,
+            message: `Upload thành công ${uploadedImages.length}/${files.length} ảnh và đã cập nhật sản phẩm`,
+            data: {
+              uploaded_images: uploadedImages,
+              failed_uploads: failedUploads,
+              total_uploaded: uploadedImages.length,
+              total_failed: failedUploads.length,
+              product_updated: true,
+              product_id: productId
+            }
+          };
+        } catch (productError: any) {
+          console.error('Error adding images to product:', productError);
+          return {
+            success: uploadedImages.length > 0,
+            message: `Upload thành công ${uploadedImages.length}/${files.length} ảnh nhưng không thể cập nhật sản phẩm`,
+            data: {
+              uploaded_images: uploadedImages,
+              failed_uploads: failedUploads,
+              total_uploaded: uploadedImages.length,
+              total_failed: failedUploads.length,
+              product_updated: false,
+              product_error: productError.message
+            }
+          };
+        }
+      }
+
       return {
         success: uploadedImages.length > 0,
         message: `Upload thành công ${uploadedImages.length}/${files.length} ảnh`,
@@ -234,7 +314,8 @@ export class UploadController {
           uploaded_images: uploadedImages,
           failed_uploads: failedUploads,
           total_uploaded: uploadedImages.length,
-          total_failed: failedUploads.length
+          total_failed: failedUploads.length,
+          product_updated: false
         }
       };
 
