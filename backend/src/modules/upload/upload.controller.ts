@@ -381,7 +381,7 @@ export class UploadController {
   }
 
   /**
-   * Delete image from Cloudinary
+   * Delete image from Cloudinary and database
    * POST /upload/delete
    */
   @Post('delete')
@@ -389,27 +389,158 @@ export class UploadController {
   @UseGuards(RolesGuard)
   @Roles('seller', 'admin')
   async deleteImage(
-    @Body('public_id') publicId: string
+    @Body('public_id') publicId?: string,
+    @Body('image_url') imageUrl?: string
   ) {
     try {
-      if (!publicId) {
-        throw new BadRequestException('Public ID is required');
+      if (!publicId && !imageUrl) {
+        throw new BadRequestException('Either public_id or image_url is required');
       }
 
-      const result = await cloudinary.uploader.destroy(publicId);
+      let cloudinaryPublicId = publicId;
+      let dbImageUrl = imageUrl;
+
+      // If only image_url is provided, extract public_id from URL
+      if (!publicId && imageUrl) {
+        // Extract public_id from Cloudinary URL
+        // Example: https://res.cloudinary.com/cloud/image/upload/v123/shop-nest/products/abc123.webp
+        const urlParts = imageUrl.split('/');
+        const versionIndex = urlParts.findIndex(part => part.startsWith('v'));
+        if (versionIndex !== -1 && versionIndex + 1 < urlParts.length) {
+          // Get everything after version as public_id (without extension)
+          const pathAfterVersion = urlParts.slice(versionIndex + 1).join('/');
+          cloudinaryPublicId = pathAfterVersion.replace(/\.[^/.]+$/, ''); // Remove extension
+        } else {
+          throw new BadRequestException('Invalid Cloudinary URL format');
+        }
+      }
+
+      // If only public_id is provided, we need to find the corresponding image_url in database
+      if (!imageUrl && publicId) {
+        // We'll need to search for images that contain this public_id in their URL
+        // This is a fallback approach since we don't store public_id separately
+        dbImageUrl = `https://res.cloudinary.com/${process.env.CLOUDINARY_CLOUD_NAME}/image/upload/.*/${publicId}.*`;
+      }
+
+      // Delete from Cloudinary first
+      const cloudinaryResult = await cloudinary.uploader.destroy(cloudinaryPublicId!);
+      const cloudinarySuccess = cloudinaryResult.result === 'ok';
+
+      // Delete from database if we have image_url
+      let databaseSuccess = false;
+      if (dbImageUrl && !dbImageUrl.includes('.*')) {
+        try {
+          await this.productsService.deleteProductImageByUrl(dbImageUrl);
+          databaseSuccess = true;
+        } catch (error) {
+          console.error('Database deletion error:', error);
+          // Don't throw error here, as Cloudinary deletion might have succeeded
+        }
+      }
 
       return {
-        success: result.result === 'ok',
-        message: result.result === 'ok' ? 'Xóa ảnh thành công' : 'Không tìm thấy ảnh',
+        success: cloudinarySuccess || databaseSuccess,
+        message: this.getDeleteMessage(cloudinarySuccess, databaseSuccess),
         data: {
-          public_id: publicId,
-          result: result.result
+          public_id: cloudinaryPublicId,
+          image_url: dbImageUrl,
+          cloudinary_result: cloudinaryResult.result,
+          database_deleted: databaseSuccess
         }
       };
 
     } catch (error) {
       console.error('Delete image error:', error);
       throw new InternalServerErrorException('Delete image failed');
+    }
+  }
+
+  /**
+   * Delete image from Cloudinary and database by URL
+   * POST /upload/delete-by-url
+   */
+  @Post('delete-by-url')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(RolesGuard)
+  @Roles('seller', 'admin')
+  async deleteImageByUrl(
+    @Body('image_url') imageUrl: string
+  ) {
+    try {
+      if (!imageUrl) {
+        throw new BadRequestException('Image URL is required');
+      }
+
+      // Extract public_id from Cloudinary URL
+      let publicId: string;
+      try {
+        // Example URL: https://res.cloudinary.com/cloud/image/upload/v123/shop-nest/products/abc123.webp
+        const urlParts = imageUrl.split('/');
+        const uploadIndex = urlParts.indexOf('upload');
+        
+        if (uploadIndex === -1) {
+          throw new Error('Not a valid Cloudinary URL');
+        }
+
+        // Get path after 'upload/v{version}/'
+        const pathAfterUpload = urlParts.slice(uploadIndex + 1);
+        
+        // Remove version part (v123456)
+        const pathWithoutVersion = pathAfterUpload.filter(part => !part.startsWith('v') || part.length < 5);
+        
+        // Join path and remove file extension
+        publicId = pathWithoutVersion.join('/').replace(/\.[^/.]+$/, '');
+        
+      } catch {
+        throw new BadRequestException('Invalid Cloudinary URL format');
+      }
+
+      // Delete from Cloudinary
+      const cloudinaryResult = await cloudinary.uploader.destroy(publicId);
+      const cloudinarySuccess = cloudinaryResult.result === 'ok';
+
+      // Delete from database
+      let databaseSuccess = false;
+      try {
+        await this.productsService.deleteProductImageByUrl(imageUrl);
+        databaseSuccess = true;
+      } catch (dbError) {
+        console.error('Database deletion error:', dbError);
+        // Continue execution, don't throw error
+      }
+
+      return {
+        success: cloudinarySuccess || databaseSuccess,
+        message: this.getDeleteMessage(cloudinarySuccess, databaseSuccess),
+        data: {
+          public_id: publicId,
+          image_url: imageUrl,
+          cloudinary_result: cloudinaryResult.result,
+          database_deleted: databaseSuccess
+        }
+      };
+
+    } catch (error) {
+      console.error('Delete image by URL error:', error);
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Delete image failed');
+    }
+  }
+
+  /**
+   * Helper method to generate appropriate delete message
+   */
+  private getDeleteMessage(cloudinarySuccess: boolean, databaseSuccess: boolean): string {
+    if (cloudinarySuccess && databaseSuccess) {
+      return 'Xóa ảnh thành công từ cả Cloudinary và database';
+    } else if (cloudinarySuccess && !databaseSuccess) {
+      return 'Xóa ảnh thành công từ Cloudinary nhưng không tìm thấy trong database';
+    } else if (!cloudinarySuccess && databaseSuccess) {
+      return 'Xóa ảnh thành công từ database nhưng không tìm thấy trong Cloudinary';
+    } else {
+      return 'Không tìm thấy ảnh trong cả Cloudinary và database';
     }
   }
 }

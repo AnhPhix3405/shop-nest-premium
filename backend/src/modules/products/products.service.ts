@@ -253,6 +253,23 @@ export class ProductsService {
   }
 
   /**
+   * Xóa ảnh sản phẩm theo URL
+   */
+  async deleteProductImageByUrl(imageUrl: string): Promise<void> {
+    const image = await this.productsRepository.findProductImageByUrl(imageUrl);
+    
+    if (!image) {
+      throw new NotFoundException(`Product image with URL not found`);
+    }
+
+    const deleted = await this.productsRepository.deleteProductImage(image.id);
+    
+    if (!deleted) {
+      throw new BadRequestException(`Failed to delete product image`);
+    }
+  }
+
+  /**
    * Cập nhật URL ảnh sản phẩm
    */
   async updateProductImageUrl(imageId: number, newImageUrl: string): Promise<ProductImage> {

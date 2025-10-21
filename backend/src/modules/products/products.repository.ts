@@ -156,6 +156,15 @@ export class ProductsRepository {
   }
 
   /**
+   * Tìm ảnh sản phẩm theo URL
+   */
+  async findProductImageByUrl(imageUrl: string): Promise<ProductImage | null> {
+    return await this.productImageRepository.findOne({
+      where: { image_url: imageUrl },
+    });
+  }
+
+  /**
    * Xóa ảnh sản phẩm
    */
   async deleteProductImage(id: number): Promise<boolean> {

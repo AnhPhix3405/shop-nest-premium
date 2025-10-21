@@ -34,6 +34,16 @@ export const PRODUCT_ENDPOINTS = {
   DELETE: '/products/delete',          // DELETE - Seller only: Delete product (/products/:id)
 } as const;
 
+// ===== UPLOAD ENDPOINTS =====
+export const UPLOAD_ENDPOINTS = {
+  AVATAR: '/upload/avatar',            // POST - Auth: Upload avatar
+  PRODUCT_IMAGE: '/upload/product-image',    // POST - Seller/Admin: Upload single product image
+  PRODUCT_IMAGES: '/upload/product-images',  // POST - Seller/Admin: Upload multiple product images
+  FROM_URL: '/upload/from-url',        // POST - Seller/Admin: Upload image from URL
+  DELETE: '/upload/delete',            // POST - Seller/Admin: Delete image from Cloudinary
+  DELETE_BY_URL: '/upload/delete-by-url',    // POST - Seller/Admin: Delete image by URL
+} as const;
+
 // ===== ENDPOINT BUILDERS =====
 export const buildEndpoint = {
   // Auth endpoints (no parameters needed)
@@ -70,6 +80,16 @@ export const buildEndpoint = {
     create: () => PRODUCT_ENDPOINTS.CREATE,
     update: (id: number) => `${PRODUCT_ENDPOINTS.UPDATE}/${id}`,
     delete: (id: number) => `${PRODUCT_ENDPOINTS.DELETE}/${id}`,
+  },
+  
+  // Upload endpoints
+  upload: {
+    avatar: () => UPLOAD_ENDPOINTS.AVATAR,
+    productImage: () => UPLOAD_ENDPOINTS.PRODUCT_IMAGE,
+    productImages: () => UPLOAD_ENDPOINTS.PRODUCT_IMAGES,
+    fromUrl: () => UPLOAD_ENDPOINTS.FROM_URL,
+    delete: () => UPLOAD_ENDPOINTS.DELETE,
+    deleteByUrl: () => UPLOAD_ENDPOINTS.DELETE_BY_URL,
   }
 } as const;
 
@@ -78,6 +98,7 @@ export const API_ENDPOINTS = {
   ...AUTH_ENDPOINTS,
   ...USER_ENDPOINTS,
   ...PRODUCT_ENDPOINTS,
+  ...UPLOAD_ENDPOINTS,
   BASE_URL: API_BASE_URL,
 } as const;
 

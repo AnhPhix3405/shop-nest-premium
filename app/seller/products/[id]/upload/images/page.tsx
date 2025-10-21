@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSelector } from 'react-redux';
+import { RootState } from '@/lib/store/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,10 +21,14 @@ import {
   Check,
   AlertCircle,
   Camera,
-  Plus
+  Plus,
+  MoveUp,
+  MoveDown,
+  Star
 } from 'lucide-react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter, useParams } from 'next/navigation';
 import { toast } from '@/components/ui/use-toast';
+import { buildEndpoint, API_BASE_URL } from '@/config/api';
 
 interface ImageItem {
   id: string;
@@ -30,12 +36,54 @@ interface ImageItem {
   status: 'uploading' | 'success' | 'error';
   progress?: number;
   error?: string;
+  public_id?: string;
+  original_name?: string;
+}
+
+interface UploadResponse {
+  success: boolean;
+  message: string;
+  data: {
+    url: string;
+    public_id: string;
+    width: number;
+    height: number;
+    file_info?: {
+      original_name: string;
+      size: number;
+      mime_type: string;
+    };
+    product_updated?: boolean;
+    product_id?: number;
+  };
+}
+
+interface MultipleUploadResponse {
+  success: boolean;
+  message: string;
+  data: {
+    uploaded_images: Array<{
+      url: string;
+      public_id: string;
+      width: number;
+      height: number;
+      original_name: string;
+    }>;
+    failed_uploads: string[];
+    total_uploaded: number;
+    total_failed: number;
+    product_updated?: boolean;
+    product_id?: number;
+  };
 }
 
 export default function UploadImagesPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const productId = searchParams.get('productId') || 'new-product';
+  const params = useParams();
+  const productId = params?.id as string;
+  
+  // Get user and token from Redux
+  const { user } = useSelector((state: RootState) => state.auth);
   
   // States
   const [images, setImages] = useState<ImageItem[]>([]);
@@ -46,6 +94,83 @@ export default function UploadImagesPage() {
 
   const maxImages = 10;
   const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+  const maxFileSize = 5 * 1024 * 1024; // 5MB
+
+  // Delete image from Cloudinary and database
+  const deleteImageFromCloudinary = async (publicId: string, imageUrl?: string): Promise<boolean> => {
+    try {
+      // Use delete-by-url endpoint if we have the image URL, otherwise use delete endpoint
+      const endpoint = imageUrl 
+        ? `${API_BASE_URL}${buildEndpoint.upload.deleteByUrl()}`
+        : `${API_BASE_URL}${buildEndpoint.upload.delete()}`;
+        
+      const body = imageUrl 
+        ? { image_url: imageUrl }
+        : { public_id: publicId };
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.access_token}`,
+        },
+        body: JSON.stringify(body)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result.success;
+    } catch (error: any) {
+      console.error('Delete image error:', error);
+      return false;
+    }
+  };
+
+  // Validate file
+  const validateFile = (file: File): { isValid: boolean; error?: string } => {
+    if (!allowedImageTypes.includes(file.type)) {
+      return {
+        isValid: false,
+        error: `${file.name} không phải là file ảnh hợp lệ (chỉ chấp nhận JPG, PNG, WebP)`
+      };
+    }
+    
+    if (file.size > maxFileSize) {
+      return {
+        isValid: false,
+        error: `${file.name} vượt quá giới hạn ${Math.round(maxFileSize / 1024 / 1024)}MB`
+      };
+    }
+    
+    return { isValid: true };
+  };
+
+  // Check authentication
+  useEffect(() => {
+    if (!user || !user.access_token) {
+      toast({
+        title: 'Lỗi xác thực',
+        description: 'Vui lòng đăng nhập để upload ảnh.',
+        variant: 'destructive'
+      });
+      router.push('/login');
+    }
+  }, [user, router]);
+
+  // Cleanup blob URLs when component unmounts
+  useEffect(() => {
+    return () => {
+      images.forEach(image => {
+        if (image.url.startsWith('blob:')) {
+          URL.revokeObjectURL(image.url);
+        }
+      });
+    };
+  }, []);
 
   // Validate URL
   const isValidImageUrl = (url: string): boolean => {
@@ -58,8 +183,98 @@ export default function UploadImagesPage() {
     }
   };
 
+  // Upload image from URL
+  const uploadImageFromUrl = async (imageUrl: string): Promise<UploadResponse | null> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}${buildEndpoint.upload.fromUrl()}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${user?.access_token}`,
+        },
+        body: JSON.stringify({
+          imageUrl: imageUrl,
+          folder: 'shop-nest/products'
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error: any) {
+      console.error('Upload from URL error:', error);
+      throw error;
+    }
+  };
+
+  // Upload single file
+  const uploadSingleFile = async (file: File): Promise<UploadResponse | null> => {
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      if (productId && productId !== 'new-product') {
+        formData.append('product_id', productId);
+      }
+
+      const response = await fetch(`${API_BASE_URL}${buildEndpoint.upload.productImage()}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${user?.access_token}`,
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error: any) {
+      console.error('Upload file error:', error);
+      throw error;
+    }
+  };
+
+  // Upload multiple files
+  const uploadMultipleFiles = async (files: File[]): Promise<MultipleUploadResponse | null> => {
+    try {
+      const formData = new FormData();
+      files.forEach(file => {
+        formData.append('images', file);
+      });
+      if (productId && productId !== 'new-product') {
+        formData.append('product_id', productId);
+      }
+
+      const response = await fetch(`${API_BASE_URL}${buildEndpoint.upload.productImages()}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${user?.access_token}`,
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result;
+    } catch (error: any) {
+      console.error('Upload multiple files error:', error);
+      throw error;
+    }
+  };
+
   // Add image by URL
-  const addImageByUrl = () => {
+  const addImageByUrl = async () => {
     const url = currentImageUrl.trim();
     
     if (!url) {
@@ -82,6 +297,15 @@ export default function UploadImagesPage() {
       return;
     }
 
+    if (!user?.access_token) {
+      toast({
+        title: 'Lỗi xác thực',
+        description: 'Vui lòng đăng nhập để upload ảnh.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
     const newImage: ImageItem = {
       id: `url-${Date.now()}`,
       url: url,
@@ -93,64 +317,87 @@ export default function UploadImagesPage() {
     setCurrentImageUrl('');
     setErrors(prev => ({ ...prev, url: '' }));
 
-    // Simulate upload progress
-    simulateUpload(newImage.id, url);
-  };
-
-  // Simulate upload progress
-  const simulateUpload = (imageId: string, url: string) => {
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += Math.random() * 30;
+    try {
+      const result = await uploadImageFromUrl(url);
       
-      setImages(prev => prev.map(img => 
-        img.id === imageId 
-          ? { ...img, progress: Math.min(progress, 100) }
-          : img
-      ));
-
-      if (progress >= 100) {
-        clearInterval(interval);
-        // Simulate random success/error
-        const isSuccess = Math.random() > 0.1; // 90% success rate
-        
+      if (result?.success) {
         setImages(prev => prev.map(img => 
-          img.id === imageId 
+          img.id === newImage.id 
             ? { 
                 ...img, 
-                status: isSuccess ? 'success' : 'error',
+                status: 'success',
                 progress: 100,
-                error: isSuccess ? undefined : 'Không thể tải ảnh từ URL này'
+                url: result.data.url,
+                public_id: result.data.public_id
               }
             : img
         ));
+
+        toast({
+          title: 'Upload thành công',
+          description: result.message,
+        });
+      } else {
+        throw new Error(result?.message || 'Upload failed');
       }
-    }, 200);
+    } catch (error: any) {
+      setImages(prev => prev.map(img => 
+        img.id === newImage.id 
+          ? { 
+              ...img, 
+              status: 'error',
+              progress: 100,
+              error: error.message
+            }
+          : img
+      ));
+
+      toast({
+        title: 'Lỗi upload',
+        description: error.message,
+        variant: 'destructive'
+      });
+    }
   };
 
   // Handle file upload
-  const handleFileUpload = (files: FileList) => {
-    const validFiles = Array.from(files).filter(file => {
-      if (!allowedImageTypes.includes(file.type)) {
+  const handleFileUpload = async (files: FileList) => {
+    if (!user?.access_token) {
+      toast({
+        title: 'Lỗi xác thực',
+        description: 'Vui lòng đăng nhập để upload ảnh.',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    // Validate files
+    const validFiles: File[] = [];
+    const invalidFiles: string[] = [];
+
+    Array.from(files).forEach(file => {
+      const validation = validateFile(file);
+      if (validation.isValid) {
+        validFiles.push(file);
+      } else {
+        invalidFiles.push(validation.error!);
+      }
+    });
+
+    // Show validation errors
+    if (invalidFiles.length > 0) {
+      invalidFiles.forEach(error => {
         toast({
           title: "File không hợp lệ",
-          description: `${file.name} không phải là file ảnh hợp lệ`,
+          description: error,
           variant: "destructive"
         });
-        return false;
-      }
-      
-      if (file.size > 10 * 1024 * 1024) { // 10MB limit
-        toast({
-          title: "File quá lớn",
-          description: `${file.name} vượt quá giới hạn 10MB`,
-          variant: "destructive"
-        });
-        return false;
-      }
-      
-      return true;
-    });
+      });
+    }
+
+    if (validFiles.length === 0) {
+      return;
+    }
 
     if (images.length + validFiles.length > maxImages) {
       toast({
@@ -161,61 +408,188 @@ export default function UploadImagesPage() {
       return;
     }
 
-    validFiles.forEach(file => {
-      const imageId = `file-${Date.now()}-${Math.random()}`;
-      const imageUrl = URL.createObjectURL(file);
-      
-      const newImage: ImageItem = {
-        id: imageId,
-        url: imageUrl,
-        status: 'uploading',
-        progress: 0
-      };
+    // Add files to state with uploading status
+    const newImages: ImageItem[] = validFiles.map(file => ({
+      id: `file-${Date.now()}-${Math.random()}`,
+      url: URL.createObjectURL(file),
+      status: 'uploading',
+      progress: 0,
+      original_name: file.name
+    }));
 
-      setImages(prev => [...prev, newImage]);
-      
-      // Simulate upload
-      simulateFileUpload(imageId, file);
-    });
+    setImages(prev => [...prev, ...newImages]);
+
+    // Upload files
+    if (validFiles.length === 1) {
+      await uploadSingleFileHandler(validFiles[0], newImages[0].id);
+    } else {
+      await uploadMultipleFilesHandler(validFiles, newImages);
+    }
   };
 
-  // Simulate file upload
-  const simulateFileUpload = (imageId: string, file: File) => {
-    let progress = 0;
-    const interval = setInterval(() => {
-      progress += Math.random() * 25;
+  // Handle single file upload
+  const uploadSingleFileHandler = async (file: File, imageId: string) => {
+    try {
+      const result = await uploadSingleFile(file);
       
+      if (result?.success) {
+        setImages(prev => prev.map(img => 
+          img.id === imageId 
+            ? { 
+                ...img, 
+                status: 'success',
+                progress: 100,
+                url: result.data.url,
+                public_id: result.data.public_id
+              }
+            : img
+        ));
+
+        toast({
+          title: 'Upload thành công',
+          description: result.message,
+        });
+      } else {
+        throw new Error(result?.message || 'Upload failed');
+      }
+    } catch (error: any) {
       setImages(prev => prev.map(img => 
         img.id === imageId 
-          ? { ...img, progress: Math.min(progress, 100) }
+          ? { 
+              ...img, 
+              status: 'error',
+              progress: 100,
+              error: error.message
+            }
           : img
       ));
 
-      if (progress >= 100) {
-        clearInterval(interval);
-        
+      toast({
+        title: 'Lỗi upload',
+        description: error.message,
+        variant: 'destructive'
+      });
+    }
+  };
+
+  // Handle multiple files upload
+  const uploadMultipleFilesHandler = async (files: File[], newImages: ImageItem[]) => {
+    try {
+      const result = await uploadMultipleFiles(files);
+      
+      if (result?.success && result.data.uploaded_images) {
+        // Update successful uploads
+        result.data.uploaded_images.forEach((uploadedImg, index) => {
+          const imageId = newImages[index]?.id;
+          if (imageId) {
+            setImages(prev => prev.map(img => 
+              img.id === imageId 
+                ? { 
+                    ...img, 
+                    status: 'success',
+                    progress: 100,
+                    url: uploadedImg.url,
+                    public_id: uploadedImg.public_id
+                  }
+                : img
+            ));
+          }
+        });
+
+        // Mark failed uploads
+        if (result.data.failed_uploads.length > 0) {
+          result.data.failed_uploads.forEach(failedName => {
+            const failedImage = newImages.find(img => img.original_name === failedName);
+            if (failedImage) {
+              setImages(prev => prev.map(img => 
+                img.id === failedImage.id 
+                  ? { 
+                      ...img, 
+                      status: 'error',
+                      progress: 100,
+                      error: 'Upload failed'
+                    }
+                  : img
+              ));
+            }
+          });
+        }
+
+        toast({
+          title: 'Upload hoàn tất',
+          description: result.message,
+        });
+      } else {
+        throw new Error(result?.message || 'Upload failed');
+      }
+    } catch (error: any) {
+      // Mark all as failed
+      newImages.forEach(newImg => {
         setImages(prev => prev.map(img => 
-          img.id === imageId 
-            ? { ...img, status: 'success', progress: 100 }
+          img.id === newImg.id 
+            ? { 
+                ...img, 
+                status: 'error',
+                progress: 100,
+                error: error.message
+              }
             : img
         ));
-      }
-    }, 150);
+      });
+
+      toast({
+        title: 'Lỗi upload',
+        description: error.message,
+        variant: 'destructive'
+      });
+    }
   };
 
   // Remove image
-  const removeImage = (imageId: string) => {
+  const removeImage = async (imageId: string) => {
+    const image = images.find(img => img.id === imageId);
+    if (!image) return;
+
+    // If image has public_id, delete from Cloudinary and database
+    if (image.public_id && image.status === 'success') {
+      const confirmDelete = window.confirm('Bạn có chắc chắn muốn xóa ảnh này?');
+      if (!confirmDelete) return;
+
+      // Pass both public_id and image URL for better deletion handling
+      const deleteSuccess = await deleteImageFromCloudinary(image.public_id, image.url);
+      if (!deleteSuccess) {
+        toast({
+          title: 'Lỗi xóa ảnh',
+          description: 'Không thể xóa ảnh từ cloud/database. Ảnh sẽ được xóa khỏi danh sách.',
+          variant: 'destructive'
+        });
+      } else {
+        toast({
+          title: 'Xóa ảnh thành công',
+          description: 'Ảnh đã được xóa khỏi cloud và database',
+        });
+      }
+    }
+
+    // Remove from state
     setImages(prev => {
-      const image = prev.find(img => img.id === imageId);
-      if (image && image.url.startsWith('blob:')) {
-        URL.revokeObjectURL(image.url);
+      const imageToRemove = prev.find(img => img.id === imageId);
+      if (imageToRemove && imageToRemove.url.startsWith('blob:')) {
+        URL.revokeObjectURL(imageToRemove.url);
       }
       return prev.filter(img => img.id !== imageId);
     });
+
+    if (!image.public_id || image.status !== 'success') {
+      toast({
+        title: 'Xóa ảnh thành công',
+        description: 'Ảnh đã được xóa khỏi danh sách',
+      });
+    }
   };
 
   // Retry upload
-  const retryUpload = (imageId: string) => {
+  const retryUpload = async (imageId: string) => {
     const image = images.find(img => img.id === imageId);
     if (!image) return;
 
@@ -226,15 +600,103 @@ export default function UploadImagesPage() {
     ));
 
     if (image.url.startsWith('blob:')) {
-      // It's a file upload, simulate again
-      simulateFileUpload(imageId, new File([], 'retry'));
+      // It's a file upload - show error because we can't retry without the original file
+      setImages(prev => prev.map(img => 
+        img.id === imageId 
+          ? { 
+              ...img, 
+              status: 'error',
+              progress: 100,
+              error: 'Vui lòng chọn lại file để upload'
+            }
+          : img
+      ));
+      
+      toast({
+        title: 'Không thể thử lại',
+        description: 'Vui lòng chọn lại file để upload',
+        variant: 'destructive'
+      });
     } else {
       // It's a URL upload
-      simulateUpload(imageId, image.url);
+      try {
+        const result = await uploadImageFromUrl(image.url);
+        
+        if (result?.success) {
+          setImages(prev => prev.map(img => 
+            img.id === imageId 
+              ? { 
+                  ...img, 
+                  status: 'success',
+                  progress: 100,
+                  url: result.data.url,
+                  public_id: result.data.public_id
+                }
+              : img
+          ));
+
+          toast({
+            title: 'Upload thành công',
+            description: result.message,
+          });
+        } else {
+          throw new Error(result?.message || 'Upload failed');
+        }
+      } catch (error: any) {
+        setImages(prev => prev.map(img => 
+          img.id === imageId 
+            ? { 
+                ...img, 
+                status: 'error',
+                progress: 100,
+                error: error.message
+              }
+            : img
+        ));
+
+        toast({
+          title: 'Lỗi upload',
+          description: error.message,
+          variant: 'destructive'
+        });
+      }
     }
   };
 
-  // Drag and drop handlers
+  // Move image up/down in the list
+  const moveImage = (imageId: string, direction: 'up' | 'down') => {
+    setImages(prev => {
+      const currentIndex = prev.findIndex(img => img.id === imageId);
+      if (currentIndex === -1) return prev;
+
+      const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+      if (newIndex < 0 || newIndex >= prev.length) return prev;
+
+      const newImages = [...prev];
+      [newImages[currentIndex], newImages[newIndex]] = [newImages[newIndex], newImages[currentIndex]];
+      
+      return newImages;
+    });
+  };
+
+  // Set image as main/primary
+  const setAsMainImage = (imageId: string) => {
+    setImages(prev => {
+      const imageIndex = prev.findIndex(img => img.id === imageId);
+      if (imageIndex === -1 || imageIndex === 0) return prev;
+
+      const newImages = [...prev];
+      const [imageToMove] = newImages.splice(imageIndex, 1);
+      newImages.unshift(imageToMove);
+      
+      return newImages;
+    });
+
+    toast({
+      title: 'Đặt ảnh chính thành công',
+      description: 'Ảnh đã được đặt làm ảnh chính cho sản phẩm',
+    });
+  };
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(true);
@@ -255,7 +717,7 @@ export default function UploadImagesPage() {
     }
   };
 
-  // Submit all images
+  // Submit all images (if not already uploaded to product)
   const handleSubmit = async () => {
     const successImages = images.filter(img => img.status === 'success');
     
@@ -268,22 +730,33 @@ export default function UploadImagesPage() {
       return;
     }
 
+    // Check if there are any uploading images
+    const uploadingImages = images.filter(img => img.status === 'uploading');
+    if (uploadingImages.length > 0) {
+      toast({
+        title: "Vui lòng đợi",
+        description: `Còn ${uploadingImages.length} ảnh đang được upload`,
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsSubmitting(true);
     
     try {
-      // TODO: Implement API call to save images
-      console.log('Images to save:', successImages.map(img => img.url));
-      
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
+      // Show success message
       toast({
-        title: "Upload ảnh thành công! 🎉",
+        title: "Lưu ảnh thành công! 🎉",
         description: `Đã upload ${successImages.length} ảnh cho sản phẩm`,
       });
       
-      // Redirect to product list or product detail
+      // Redirect to product list or product detail after a delay
       setTimeout(() => {
-        router.push('/seller/products');
+        if (productId && productId !== 'new-product') {
+          router.push(`/seller/products/${productId}`);
+        } else {
+          router.push('/seller/products');
+        }
       }, 1500);
       
     } catch (error) {
@@ -297,9 +770,33 @@ export default function UploadImagesPage() {
     }
   };
 
+  // Clear all images
+  const clearAllImages = () => {
+    const confirmClear = window.confirm('Bạn có chắc chắn muốn xóa tất cả ảnh?');
+    if (!confirmClear) return;
+
+    // Revoke blob URLs
+    images.forEach(image => {
+      if (image.url.startsWith('blob:')) {
+        URL.revokeObjectURL(image.url);
+      }
+    });
+
+    setImages([]);
+    toast({
+      title: 'Đã xóa tất cả ảnh',
+      description: 'Tất cả ảnh đã được xóa khỏi danh sách',
+    });
+  };
+
   const successCount = images.filter(img => img.status === 'success').length;
   const uploadingCount = images.filter(img => img.status === 'uploading').length;
   const errorCount = images.filter(img => img.status === 'error').length;
+
+  // Don't render if not authenticated
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="container mx-auto p-6 max-w-5xl">
@@ -405,7 +902,7 @@ export default function UploadImagesPage() {
                   />
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
-                  JPG, PNG, WebP - Tối đa 10MB mỗi file
+                  JPG, PNG, WebP - Tối đa {Math.round(maxFileSize / 1024 / 1024)}MB mỗi file
                 </p>
               </div>
             </CardContent>
@@ -455,7 +952,7 @@ export default function UploadImagesPage() {
               <Alert>
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription className="text-xs">
-                  Đảm bảo URL ảnh có thể truy cập công khai và kết thúc bằng .jpg, .png hoặc .webp
+                  Đảm bảo URL ảnh có thể truy cập công khai và kết thúc bằng .jpg, .jpeg, .png hoặc .webp
                 </AlertDescription>
               </Alert>
             </CardContent>
@@ -466,13 +963,27 @@ export default function UploadImagesPage() {
         <div className="lg:col-span-2">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ImageIcon className="h-5 w-5" />
-                Ảnh đã thêm ({images.length}/{maxImages})
-              </CardTitle>
-              <CardDescription>
-                Xem trước và quản lý ảnh sản phẩm
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <ImageIcon className="h-5 w-5" />
+                    Ảnh đã thêm ({images.length}/{maxImages})
+                  </CardTitle>
+                  <CardDescription>
+                    Xem trước và quản lý ảnh sản phẩm
+                  </CardDescription>
+                </div>
+                {images.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={clearAllImages}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    Xóa tất cả
+                  </Button>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {images.length === 0 ? (
@@ -482,7 +993,7 @@ export default function UploadImagesPage() {
                     Chưa có ảnh nào được thêm
                   </p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Sử dụng các phương thức bên trái để thêm ảnh
+                    Sử dụng các phương thức bên trái để thêm ảnh. Ảnh đầu tiên sẽ là ảnh chính của sản phẩm.
                   </p>
                 </div>
               ) : (
@@ -549,20 +1060,60 @@ export default function UploadImagesPage() {
 
                       {/* Actions */}
                       <div className="absolute top-2 right-2 flex gap-1">
-                        {index === 0 && (
-                          <Badge variant="secondary" className="text-xs">
+                        {index === 0 ? (
+                          <Badge variant="default" className="text-xs bg-yellow-500">
+                            <Star className="h-3 w-3 mr-1" />
                             Ảnh chính
                           </Badge>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => setAsMainImage(image.id)}
+                            className="h-6 px-2 text-xs"
+                            title="Đặt làm ảnh chính"
+                          >
+                            <Star className="h-3 w-3" />
+                          </Button>
                         )}
                         <Button
                           size="sm"
                           variant="destructive"
                           onClick={() => removeImage(image.id)}
                           className="h-6 w-6 p-0"
+                          title="Xóa ảnh"
                         >
                           <X className="h-3 w-3" />
                         </Button>
                       </div>
+
+                      {/* Move buttons */}
+                      {images.length > 1 && (
+                        <div className="absolute top-2 left-2 flex flex-col gap-1">
+                          {index > 0 && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => moveImage(image.id, 'up')}
+                              className="h-6 w-6 p-0"
+                              title="Di chuyển lên"
+                            >
+                              <MoveUp className="h-3 w-3" />
+                            </Button>
+                          )}
+                          {index < images.length - 1 && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => moveImage(image.id, 'down')}
+                              className="h-6 w-6 p-0"
+                              title="Di chuyển xuống"
+                            >
+                              <MoveDown className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -575,32 +1126,62 @@ export default function UploadImagesPage() {
       <Separator className="my-8" />
 
       {/* Actions */}
-      <div className="flex flex-col sm:flex-row gap-3 justify-end">
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => router.push('/seller/products')}
-          className="w-full sm:w-auto"
-        >
-          Bỏ qua (Thêm ảnh sau)
-        </Button>
-        <Button
-          onClick={handleSubmit}
-          disabled={isSubmitting || successCount === 0}
-          className="w-full sm:w-auto flex items-center gap-2"
-        >
-          {isSubmitting ? (
-            <>
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-              Đang lưu...
-            </>
-          ) : (
-            <>
-              <Save className="h-4 w-4" />
-              Lưu ảnh ({successCount})
-            </>
+      <div className="flex flex-col sm:flex-row gap-3 justify-between">
+        <div className="flex gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.back()}
+            className="w-full sm:w-auto"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Quay lại
+          </Button>
+          {images.length > 0 && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={clearAllImages}
+              className="w-full sm:w-auto text-red-600 hover:text-red-700"
+            >
+              Xóa tất cả
+            </Button>
           )}
-        </Button>
+        </div>
+        
+        <div className="flex gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              if (productId && productId !== 'new-product') {
+                router.push(`/seller/products/${productId}`);
+              } else {
+                router.push('/seller/products');
+              }
+            }}
+            className="w-full sm:w-auto"
+          >
+            Bỏ qua (Thêm ảnh sau)
+          </Button>
+          <Button
+            onClick={handleSubmit}
+            disabled={isSubmitting || successCount === 0 || uploadingCount > 0}
+            className="w-full sm:w-auto flex items-center gap-2"
+          >
+            {isSubmitting ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                Đang lưu...
+              </>
+            ) : (
+              <>
+                <Save className="h-4 w-4" />
+                Lưu ảnh ({successCount})
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );

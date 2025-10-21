@@ -89,8 +89,25 @@ export class TokensService {
         secret: this.configService.get<string>('JWT_SECRET'),
       });
       return payload as JwtPayload;
-    } catch {
-      throw new Error('Invalid access token');
+    } catch (error: any) {
+      console.error('Access token verification error:', error);
+      
+      // Type guard for error object
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      const errorName = (error && typeof error === 'object' && 'name' in error) ? error.name : '';
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      const errorMessage = (error && typeof error === 'object' && 'message' in error) ? error.message : '';
+      
+      // Check for specific JWT errors
+      if (errorName === 'TokenExpiredError') {
+        throw new Error('Access token has expired');
+      } else if (errorName === 'JsonWebTokenError') {
+        throw new Error('Invalid access token format');
+      } else if (errorName === 'NotBeforeError') {
+        throw new Error('Access token not active yet');
+      } else {
+        throw new Error(`Invalid access token: ${errorMessage || 'Unknown error'}`);
+      }
     }
   }
 
@@ -119,13 +136,33 @@ export class TokensService {
 
       // Check if token is expired
       if (refreshTokenEntity.expires_at < new Date()) {
-        throw new Error('Refresh token expired');
+        throw new Error('Refresh token has expired');
       }
 
       return typedPayload;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      throw new Error(`Invalid refresh token: ${message}`);
+    } catch (error: any) {
+      console.error('Refresh token verification error:', error);
+      
+      // Type guard for error object
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      const errorName = (error && typeof error === 'object' && 'name' in error) ? error.name : '';
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
+      const errorMessage = (error && typeof error === 'object' && 'message' in error) ? error.message : '';
+      
+      // Check for specific JWT errors
+      if (errorName === 'TokenExpiredError') {
+        throw new Error('Refresh token has expired');
+      } else if (errorName === 'JsonWebTokenError') {
+        throw new Error('Invalid refresh token format');
+      } else if (errorName === 'NotBeforeError') {
+        throw new Error('Refresh token not active yet');
+      } else if (errorMessage) {
+        // This handles our custom error messages (not found, expired, etc.)
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
+        throw new Error(errorMessage);
+      } else {
+        throw new Error('Invalid refresh token: Unknown error');
+      }
     }
   }
 

@@ -210,7 +210,7 @@ export default function CreateProductPage() {
 
   const handleUploadImages = () => {
     if (createdProduct) {
-      router.push(`/seller/products/${createdProduct.id}/upload-images`);
+      router.push(`/seller/products/${createdProduct.id}/upload/images`);
     }
   };
 
