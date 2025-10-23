@@ -69,7 +69,7 @@ export function Header() {
       });
       dispatch(logout());
       // Redirect to home page
-      // router.push('/');
+      router.push('/');
 
     } catch (error: any) {
       console.error('Logout error:', error);
