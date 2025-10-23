@@ -1,5 +1,6 @@
 // Types for User
 export interface User {
+  id: number;
   access_token: string;
   avatar_url: string;
   email: string;

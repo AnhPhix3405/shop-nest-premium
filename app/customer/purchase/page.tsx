@@ -461,18 +461,3 @@ export default function PurchasePage() {
     </RouteProtection.CustomerOnly>
   );
 }
-
-// Option 2: Using HOC pattern (Alternative)
-// export default withAuthMiddleware(PurchasePageContent, {
-//   allowedRoles: ['customer'],
-//   requireAuth: true
-// });
-
-// Option 3: Using AuthMiddleware directly (Verbose)
-// export default function PurchasePage() {
-//   return (
-//     <AuthMiddleware allowedRoles={['customer']} requireAuth={true}>
-//       <PurchasePageContent />
-//     </AuthMiddleware>
-//   );
-// }

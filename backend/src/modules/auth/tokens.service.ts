@@ -59,24 +59,42 @@ export class TokensService {
    * Save refresh token to database
    */
   private async saveRefreshToken(userId: number, token: string): Promise<void> {
-    // Delete all old refresh tokens for this user (both active and inactive)
-    await this.refreshTokenRepository.delete({
-      user_id: userId
-    });
+    // Check if there's an existing refresh token that's not expired (regardless of is_active status)
+    const existingToken = await this.refreshTokenRepository
+      .createQueryBuilder('refresh_token')
+      .where('refresh_token.user_id = :userId', { userId })
+      .andWhere('refresh_token.expires_at > :now', { now: new Date() })
+      .getOne();
 
-    // Calculate expiration date
-    const expiresIn = this.configService.get<number>('JWT_REFRESH_EXPIRES_IN_SECONDS') || 7 * 24 * 60 * 60; // 7 days in seconds
-    const expiresAt = new Date(Date.now() + expiresIn * 1000);
+    if (existingToken) {
+      // If token exists and is still valid, just reactivate it with new token
+      await this.refreshTokenRepository.update(
+        { id: existingToken.id },
+        { 
+          token,
+          is_active: true 
+        }
+      );
+    } else {
+      // Delete all old refresh tokens for this user (both active and inactive)
+      await this.refreshTokenRepository.delete({
+        user_id: userId
+      });
 
-    // Create new refresh token entry
-    const refreshTokenEntity = this.refreshTokenRepository.create({
-      token,
-      user_id: userId,
-      expires_at: expiresAt,
-      is_active: true,
-    });
+      // Calculate expiration date
+      const expiresIn = this.configService.get<number>('JWT_REFRESH_EXPIRES_IN_SECONDS') || 7 * 24 * 60 * 60; // 7 days in seconds
+      const expiresAt = new Date(Date.now() + expiresIn * 1000);
 
-    await this.refreshTokenRepository.save(refreshTokenEntity);
+      // Create new refresh token entry
+      const refreshTokenEntity = this.refreshTokenRepository.create({
+        token,
+        user_id: userId,
+        expires_at: expiresAt,
+        is_active: true,
+      });
+
+      await this.refreshTokenRepository.save(refreshTokenEntity);
+    }
   }
 
   /**
@@ -172,6 +190,7 @@ export class TokensService {
   async revokeRefreshToken(token: string): Promise<void> {
     await this.refreshTokenRepository.update(
       { token, is_active: true },
+
       { is_active: false }
     );
   }
@@ -184,6 +203,20 @@ export class TokensService {
       { user_id: userId, is_active: true },
       { is_active: false }
     );
+  }
+
+  /**
+   * Check if user has any active refresh tokens
+   */
+  async hasActiveRefreshTokens(userId: number): Promise<boolean> {
+    const activeTokensCount = await this.refreshTokenRepository.count({
+      where: {
+        user_id: userId,
+        is_active: true,
+      },
+    });
+    
+    return activeTokensCount > 0;
   }
 
   /**

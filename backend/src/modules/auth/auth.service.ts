@@ -61,6 +61,12 @@ export class AuthService {
       throw new UnauthorizedException('Bạn chưa xác minh email. Vui lòng kiểm tra email và xác minh tài khoản trước khi đăng nhập.');
     }
 
+    // Check if user already has active refresh tokens (someone else is logged in)
+    const hasActiveTokens = await this.tokensService.hasActiveRefreshTokens(user.id);
+    if (hasActiveTokens) {
+      throw new UnauthorizedException('Tài khoản này đang được sử dụng trên thiết bị khác. Vui lòng đăng xuất khỏi thiết bị khác hoặc liên hệ quản trị viên.');
+    }
+
     // Generate tokens
     const accessToken = this.tokensService.generateAccessToken(user);
     const refreshToken = await this.tokensService.generateRefreshToken(user);
@@ -110,14 +116,14 @@ export class AuthService {
   }
 
   /**
-   * Logout user by revoking refresh token
+   * Logout user by revoking all refresh tokens of that user
    */
-  async logout(refreshToken: string): Promise<{ message: string }> {
+  async logout(userId: number): Promise<{ message: string }> {
     try {
-      await this.tokensService.revokeRefreshToken(refreshToken);
-      return { message: 'Logged out successfully' };
+      await this.tokensService.revokeAllRefreshTokens(userId);
+      return { message: 'Đăng xuất thành công' };
     } catch {
-      throw new BadRequestException('Invalid refresh token');
+      throw new UnauthorizedException('Đăng xuất thất bại');
     }
   }
 

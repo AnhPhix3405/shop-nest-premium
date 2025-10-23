@@ -65,9 +65,9 @@ export class AuthController {
   @Post('logout')
   @HttpCode(HttpStatus.OK)
   async logout(
-    @Body() refreshTokenDto: RefreshTokenDto,
+    @Body('user_id') userId: number,
   ): Promise<{ message: string }> {
-    return await this.authService.logout(refreshTokenDto.refresh_token);
+    return await this.authService.logout(userId);
   }
 
   /**
@@ -77,6 +77,19 @@ export class AuthController {
   @Post('logout-all')
   @HttpCode(HttpStatus.OK)
   async logoutAll(
+    @Body('user_id') userId: number,
+  ): Promise<{ message: string }> {
+    return await this.authService.logoutAll(userId);
+  }
+
+  /**
+   * Force logout endpoint - Đăng xuất khỏi tất cả thiết bị trước khi login
+   * POST /auth/force-logout
+   */
+  @Public()
+  @Post('force-logout')
+  @HttpCode(HttpStatus.OK)
+  async forceLogout(
     @Body('user_id') userId: number,
   ): Promise<{ message: string }> {
     return await this.authService.logoutAll(userId);

@@ -60,6 +60,7 @@ export default function LoginPage() {
               if (response.ok && data.user) {
                 // Lưu user data vào Redux store
                 dispatch(loginAction({
+                  id: data.user.id,
                   access_token: data.access_token,
                   avatar_url: data.user.avatar_url || '',
                   email: data.user.email,

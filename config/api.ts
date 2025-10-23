@@ -9,6 +9,7 @@ export const AUTH_ENDPOINTS = {
   REFRESH: '/auth/refresh',            // POST - Public: Refresh access token
   LOGOUT: '/auth/logout',              // POST - Auth: Logout from current device
   LOGOUT_ALL: '/auth/logout-all',
+  FORCE_LOGOUT: '/auth/force-logout',  // POST - Public: Force logout before login
   SEND_OTP: '/auth/send-otp',
   VERIFY_OTP: '/auth/verify-otp'       // POST - Public: Send OTP to email for verification
 } as const;
@@ -53,6 +54,7 @@ export const buildEndpoint = {
     refresh: () => AUTH_ENDPOINTS.REFRESH,
     logout: () => AUTH_ENDPOINTS.LOGOUT,
     logoutAll: () => AUTH_ENDPOINTS.LOGOUT_ALL,
+    forceLogout: () => AUTH_ENDPOINTS.FORCE_LOGOUT,
     sendOTP: () => AUTH_ENDPOINTS.SEND_OTP,
     verifyOTP: () => AUTH_ENDPOINTS.VERIFY_OTP,
   },
