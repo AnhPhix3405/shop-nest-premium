@@ -73,7 +73,7 @@ export class ProductsRepository {
       query = query.leftJoinAndSelect('product.product_images', 'product_images');
     }
     
-    return await query.orderBy('product.created_at', 'DESC').getMany();
+    return await query.orderBy('product.id', 'DESC').getMany();
   }
 
   /**

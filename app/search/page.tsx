@@ -10,79 +10,61 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from "@/components/ui/pagination"
 import { Star, Heart, ShoppingCart, Eye, MapPin, Truck } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ProductService, type Product } from "@/lib/services/productService"
+import { useToast } from "@/components/ui/use-toast"
 
-// Mock product data
-const mockProducts = [
-  {
-    id: 1,
-    name: "iPhone 15 Pro Max 256GB - Chính hãng VN/A",
-    price: 31990000,
-    originalPrice: 34990000,
-    discount: 9,
-    image: "/api/placeholder/300/300",
-    rating: 4.8,
-    reviewCount: 2456,
-    sold: 1230,
-    location: "TP. Hồ Chí Minh",
-    shop: "Apple Store Official",
-    isPreferred: true,
-    isMall: true,
-    badges: ["Chính hãng", "Freeship", "Trả góp 0%"],
-    shipping: "Giao hàng nhanh"
-  },
-  {
-    id: 2,
-    name: "Áo thun nam cotton 100% form rộng unisex",
-    price: 199000,
-    originalPrice: 299000,
-    discount: 33,
-    image: "/api/placeholder/300/300",
-    rating: 4.6,
-    reviewCount: 892,
-    sold: 5670,
-    location: "Hà Nội",
-    shop: "Fashion Store VN",
-    isPreferred: false,
-    isMall: false,
-    badges: ["Bán chạy", "Giảm 33%"],
-    shipping: "Giao hàng tiêu chuẩn"
-  },
-  {
-    id: 3,
-    name: "Laptop Dell XPS 13 9320 Core i7-1250U 16GB",
-    price: 28990000,
-    originalPrice: 32990000,
-    discount: 12,
-    image: "/api/placeholder/300/300",
-    rating: 4.9,
-    reviewCount: 156,
-    sold: 89,
-    location: "TP. Hồ Chí Minh", 
-    shop: "Dell Official Store",
-    isPreferred: true,
-    isMall: true,
-    badges: ["Chính hãng", "Bảo hành 2 năm"],
-    shipping: "Giao hàng nhanh"
-  },
-  // Add more mock products...
-  ...Array.from({ length: 20 }, (_, i) => ({
-    id: i + 4,
-    name: `Sản phẩm ${i + 4} - Mô tả ngắn gọn về sản phẩm`,
-    price: Math.floor(Math.random() * 5000000) + 100000,
-    originalPrice: Math.floor(Math.random() * 6000000) + 200000,
-    discount: Math.floor(Math.random() * 50) + 5,
-    image: "/api/placeholder/300/300",
-    rating: (Math.random() * 2 + 3).toFixed(1),
-    reviewCount: Math.floor(Math.random() * 1000) + 50,
-    sold: Math.floor(Math.random() * 5000) + 10,
+// Transform API product to display format
+interface DisplayProduct {
+  id: number
+  name: string
+  price: number
+  originalPrice?: number
+  discount?: number
+  image: string
+  rating: number
+  reviewCount: number
+  sold: number
+  location: string
+  shop: string
+  isPreferred: boolean
+  isMall: boolean
+  badges: string[]
+  shipping: string
+  description?: string
+}
+
+const transformProduct = (product: Product): DisplayProduct => {
+  // Get first image or use placeholder
+  const image = product.product_images && product.product_images.length > 0 
+    ? product.product_images[0].url 
+    : "/api/placeholder/300/300"
+
+  // Mock some display data since these aren't in the API yet
+  const mockRating = (Math.random() * 2 + 3).toFixed(1)
+  const mockReviewCount = Math.floor(Math.random() * 1000) + 50
+  const mockSold = Math.floor(Math.random() * 5000) + 10
+  const mockOriginalPrice = product.price + Math.floor(Math.random() * 500000)
+  const mockDiscount = Math.floor(((mockOriginalPrice - product.price) / mockOriginalPrice) * 100)
+
+  return {
+    id: product.id,
+    name: product.name,
+    price: product.price,
+    originalPrice: mockDiscount > 0 ? mockOriginalPrice : undefined,
+    discount: mockDiscount > 0 ? mockDiscount : undefined,
+    image,
+    rating: parseFloat(mockRating),
+    reviewCount: mockReviewCount,
+    sold: mockSold,
     location: Math.random() > 0.5 ? "TP. Hồ Chí Minh" : "Hà Nội",
-    shop: `Shop ${i + 4}`,
+    shop: `Shop ${product.seller_id}`,
     isPreferred: Math.random() > 0.7,
     isMall: Math.random() > 0.8,
-    badges: ["Bán chạy"],
-    shipping: Math.random() > 0.5 ? "Giao hàng nhanh" : "Giao hàng tiêu chuẩn"
-  }))
-]
+    badges: product.stock > 0 ? ["Còn hàng"] : ["Hết hàng"],
+    shipping: Math.random() > 0.5 ? "Giao hàng nhanh" : "Giao hàng tiêu chuẩn",
+    description: product.description
+  }
+}
 
 const ITEMS_PER_PAGE = 24
 const MAX_PAGES = 17
@@ -90,18 +72,45 @@ const MAX_PAGES = 17
 function SearchContent() {
   const searchParams = useSearchParams()
   const keyword = searchParams.get("keyword") || ""
+  const { toast } = useToast()
   
   const [currentPage, setCurrentPage] = useState(1)
   const [sortBy, setSortBy] = useState("relevant")
   const [filters, setFilters] = useState({})
-  const [products, setProducts] = useState(mockProducts)
+  const [products, setProducts] = useState<DisplayProduct[]>([])
   const [loading, setLoading] = useState(false)
 
-  // Filter products based on keyword
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(keyword.toLowerCase()) ||
-    product.shop.toLowerCase().includes(keyword.toLowerCase())
-  )
+  // Fetch products when keyword changes
+  useEffect(() => {
+    const fetchProducts = async () => {
+      if (!keyword.trim()) {
+        setProducts([])
+        return
+      }
+
+      setLoading(true)
+      try {
+        const apiProducts = await ProductService.searchProducts(keyword)
+        const displayProducts = apiProducts.map(transformProduct)
+        setProducts(displayProducts)
+      } catch (error) {
+        console.error('Error fetching products:', error)
+        setProducts([])
+        toast({
+          variant: "destructive",
+          title: "Lỗi tìm kiếm",
+          description: "Có lỗi xảy ra khi tìm kiếm sản phẩm. Vui lòng thử lại."
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchProducts()
+  }, [keyword])
+
+  // All products are already filtered by the API search
+  const filteredProducts = products
 
   // Sort products
   const sortedProducts = [...filteredProducts].sort((a, b) => {
@@ -191,12 +200,25 @@ function SearchContent() {
       <div className="container mx-auto px-4 py-6">
         {/* Search Header */}
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">
-            Kết quả tìm kiếm cho "{keyword}"
-          </h1>
-          <p className="text-gray-600">
-            Tìm thấy {totalProducts.toLocaleString()} sản phẩm
-          </p>
+          {keyword ? (
+            <>
+              <h1 className="text-2xl font-bold text-gray-800 mb-2">
+                Kết quả tìm kiếm cho "{keyword}"
+              </h1>
+              <p className="text-gray-600">
+                {loading ? "Đang tìm kiếm..." : `Tìm thấy ${totalProducts.toLocaleString()} sản phẩm`}
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-2xl font-bold text-gray-800 mb-2">
+                Tìm kiếm sản phẩm
+              </h1>
+              <p className="text-gray-600">
+                Nhập từ khóa để tìm kiếm sản phẩm
+              </p>
+            </>
+          )}
         </div>
 
         <div className="flex gap-6">
@@ -255,7 +277,7 @@ function SearchContent() {
                         />
                         
                         {/* Discount Badge */}
-                        {product.discount > 0 && (
+                        {product.discount && product.discount > 0 && (
                           <div className="absolute top-2 left-2 bg-red-500 text-white text-xs font-bold px-2 py-1 rounded">
                             -{product.discount}%
                           </div>
@@ -301,7 +323,7 @@ function SearchContent() {
                             <span className="text-lg font-bold text-red-600">
                               {formatPrice(product.price)}
                             </span>
-                            {product.originalPrice > product.price && (
+                            {product.originalPrice && product.originalPrice > product.price && (
                               <span className="text-sm text-gray-500 line-through">
                                 {formatPrice(product.originalPrice)}
                               </span>
@@ -312,7 +334,7 @@ function SearchContent() {
                         {/* Badges */}
                         <div className="mb-3">
                           <div className="flex flex-wrap gap-1">
-                            {product.badges.slice(0, 2).map((badge, index) => (
+                            {product.badges.slice(0, 2).map((badge: string, index: number) => (
                               <Badge key={index} variant="outline" className="text-xs">
                                 {badge}
                               </Badge>
@@ -360,12 +382,25 @@ function SearchContent() {
                     <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
                   </svg>
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
-                  Không tìm thấy sản phẩm nào
-                </h3>
-                <p className="text-gray-600">
-                  Hãy thử tìm kiếm với từ khóa khác hoặc điều chỉnh bộ lọc của bạn
-                </p>
+                {keyword ? (
+                  <>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      Không tìm thấy sản phẩm nào cho "{keyword}"
+                    </h3>
+                    <p className="text-gray-600">
+                      Hãy thử tìm kiếm với từ khóa khác hoặc điều chỉnh bộ lọc của bạn
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      Nhập từ khóa để bắt đầu tìm kiếm
+                    </h3>
+                    <p className="text-gray-600">
+                      Tìm kiếm sản phẩm theo tên, mô tả hoặc thương hiệu
+                    </p>
+                  </>
+                )}
               </div>
             )}
 

@@ -1,10 +1,12 @@
 import {
     Controller,
+    Get,
     Post,
     Put,
     Delete,
     Body,
     Param,
+    Query,
     HttpCode,
     HttpStatus,
     ParseIntPipe,
@@ -21,7 +23,6 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import type * as CommonTypes from '../../common/interfaces/authenticated-request.interface';
 
 @Controller('products')
-@UseGuards(JwtAuthGuard)
 @UsePipes(new ValidationPipe({
     whitelist: true,
     forbidNonWhitelisted: true,
@@ -31,12 +32,46 @@ export class ProductsController {
     constructor(private readonly productsService: ProductsService) { }
 
     /**
+     * Tìm kiếm sản phẩm theo tên
+     * GET /products/search?q=keyword
+     */
+    @Get('search')
+    @HttpCode(HttpStatus.OK)
+    async searchProducts(
+        @Query('q') searchTerm: string
+    ) {
+        try {
+            if (!searchTerm || searchTerm.trim() === '') {
+                return {
+                    success: false,
+                    message: 'Từ khóa tìm kiếm không được để trống',
+                    data: []
+                };
+            }
+
+            const products = await this.productsService.searchProducts(searchTerm.trim());
+
+            return {
+                success: true,
+                message: `Tìm thấy ${products.length} sản phẩm`,
+                data: products
+            };
+        } catch (error) {
+            return {
+                success: false,
+                message: error instanceof Error ? error.message : 'Có lỗi xảy ra khi tìm kiếm sản phẩm',
+                data: []
+            };
+        }
+    }
+
+    /**
      * Tạo sản phẩm mới
      * POST /products/create
      */
     @Post('create')
     @HttpCode(HttpStatus.CREATED)
-    @UseGuards(RolesGuard)
+    @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles('seller')
     async createProduct(
         @Body() createProductDto: CreateProductDto,
@@ -73,7 +108,7 @@ export class ProductsController {
      */
     @Put('update/:id')
     @HttpCode(HttpStatus.OK)
-    @UseGuards(RolesGuard)
+    @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles('seller')
     async updateProduct(
         @Param('id', ParseIntPipe) id: number,
@@ -113,7 +148,7 @@ export class ProductsController {
      */
     @Delete('delete/:id')
     @HttpCode(HttpStatus.OK)
-    @UseGuards(RolesGuard)
+    @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles('seller')
     async deleteProduct(
         @Param('id', ParseIntPipe) id: number,

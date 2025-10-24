@@ -33,6 +33,7 @@ export const PRODUCT_ENDPOINTS = {
   CREATE: '/products/create',          // POST - Seller only: Create new product
   UPDATE: '/products/update',          // PUT - Seller only: Update product (/products/:id)
   DELETE: '/products/delete',          // DELETE - Seller only: Delete product (/products/:id)
+  SEARCH: '/products/search',          // GET - Public: Search products (?q=keyword)
 } as const;
 
 // ===== UPLOAD ENDPOINTS =====
