@@ -12,6 +12,7 @@ import { Star, Heart, ShoppingCart, Eye, MapPin, Truck } from "lucide-react"
 import { Skeleton } from "@/components/ui/skeleton"
 import { ProductService, type Product } from "@/lib/services/productService"
 import { useToast } from "@/components/ui/use-toast"
+import NoResultsFound from "@/components/errors/NoResultsFound"
 
 // Transform API product to display format
 interface DisplayProduct {
@@ -376,32 +377,11 @@ function SearchContent() {
 
             {/* No Results */}
             {!loading && currentProducts.length === 0 && (
-              <div className="text-center py-12">
-                <div className="text-gray-400 mb-4">
-                  <svg className="mx-auto w-24 h-24" fill="currentColor" viewBox="0 0 20 20">
-                    <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                  </svg>
-                </div>
-                {keyword ? (
-                  <>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">
-                      Không tìm thấy sản phẩm nào cho "{keyword}"
-                    </h3>
-                    <p className="text-gray-600">
-                      Hãy thử tìm kiếm với từ khóa khác hoặc điều chỉnh bộ lọc của bạn
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">
-                      Nhập từ khóa để bắt đầu tìm kiếm
-                    </h3>
-                    <p className="text-gray-600">
-                      Tìm kiếm sản phẩm theo tên, mô tả hoặc thương hiệu
-                    </p>
-                  </>
-                )}
-              </div>
+              <NoResultsFound
+                type={keyword ? "no-results" : "no-keyword"}
+                keyword={keyword}
+                onRetry={() => window.location.reload()}
+              />
             )}
 
             {/* Pagination */}
