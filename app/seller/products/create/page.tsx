@@ -10,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Upload, ArrowLeft, Save, CheckCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCreateProduct } from '@/components/hooks/useProduct';
+import { useCreateProduct } from '@/hooks/useProduct';
 
 export default function CreateProductPage() {
   const router = useRouter();
