@@ -1,8 +1,5 @@
 'use client';
 
-import { useState } from 'react';
-import { useSelector } from 'react-redux';
-import { RootState } from '@/lib/store/types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,212 +10,29 @@ import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Upload, ArrowLeft, Save, CheckCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { toast } from '@/components/ui/use-toast';
-import { buildEndpoint, API_BASE_URL } from '@/config/api';
-
-interface ProductFormData {
-  name: string;
-  description: string;
-  price: string;
-  stock: string;
-  category_id: string;
-}
-
-interface CreateProductResponse {
-  success: boolean;
-  message: string;
-  data: {
-    id: number;
-    name: string;
-    description: string;
-    price: number;
-    stock: number;
-    category_id: number;
-    seller_id: number;
-    created_at: string;
-    updated_at: string;
-    product_images: any[];
-  };
-}
+import { useCreateProduct } from '@/components/hooks/useProduct';
 
 export default function CreateProductPage() {
   const router = useRouter();
   
-  // Get user and token from Redux
-  const { user } = useSelector((state: RootState) => state.auth);
-  
-  // Form state
-  const [formData, setFormData] = useState<ProductFormData>({
-    name: '',
-    description: '',
-    price: '',
-    stock: '',
-    category_id: ''
-  });
-
-  // UI state
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [createdProduct, setCreatedProduct] = useState<any>(null);
-
-  // Mock categories (sau này sẽ fetch từ API)
-  const categories = [
-    { id: '1', name: 'Điện tử' },
-    { id: '2', name: 'Thời trang' },
-    { id: '3', name: 'Nhà cửa & Đời sống' },
-    { id: '4', name: 'Sách & Văn phòng phẩm' },
-    { id: '5', name: 'Thể thao & Du lịch' },
-    { id: '6', name: 'Làm đẹp & Sức khỏe' },
-    { id: '7', name: 'Ô tô & Xe máy' },
-    { id: '8', name: 'Khác' }
-  ];
-
-  const handleInputChange = (field: keyof ProductFormData, value: string) => {
-    setFormData(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  // Sử dụng hook useCreateProduct để thay thế tất cả logic
+  const {
+    // State
+    formData,
+    isSubmitting,
+    errors,
+    createdProduct,
+    categories,
+    user,
     
-    // Clear error khi user nhập lại
-    if (errors[field]) {
-      setErrors(prev => ({
-        ...prev,
-        [field]: ''
-      }));
-    }
-  };
-
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.name.trim()) {
-      newErrors.name = 'Tên sản phẩm là bắt buộc';
-    } else if (formData.name.length < 3) {
-      newErrors.name = 'Tên sản phẩm phải có ít nhất 3 ký tự';
-    } else if (formData.name.length > 200) {
-      newErrors.name = 'Tên sản phẩm không được vượt quá 200 ký tự';
-    }
-
-    if (formData.description && formData.description.length > 5000) {
-      newErrors.description = 'Mô tả không được vượt quá 5000 ký tự';
-    }
-
-    const price = parseFloat(formData.price);
-    if (!formData.price) {
-      newErrors.price = 'Giá sản phẩm là bắt buộc';
-    } else if (isNaN(price) || price <= 0) {
-      newErrors.price = 'Giá sản phẩm phải là số dương';
-    }
-
-    const stock = parseInt(formData.stock);
-    if (!formData.stock) {
-      newErrors.stock = 'Số lượng tồn kho là bắt buộc';
-    } else if (isNaN(stock) || stock < 0) {
-      newErrors.stock = 'Số lượng tồn kho không được âm';
-    }
-
-    if (!formData.category_id) {
-      newErrors.category_id = 'Vui lòng chọn danh mục';
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    // Kiểm tra authentication
-    if (!user || !user.access_token) {
-      toast({
-        title: 'Lỗi xác thực',
-        description: 'Vui lòng đăng nhập để tạo sản phẩm.',
-        variant: 'destructive'
-      });
-      router.push('/login');
-      return;
-    }
-
-    if (!validateForm()) {
-      return;
-    }
-
-    setIsSubmitting(true);
-    
-    try {
-      // Prepare data for API
-      const productData = {
-        name: formData.name.trim(),
-        description: formData.description.trim(),
-        price: parseFloat(formData.price),
-        stock: parseInt(formData.stock),
-        category_id: parseInt(formData.category_id)
-      };
-
-      console.log('🚀 Creating product with data:', productData);
-
-      const response = await fetch(`${API_BASE_URL}${buildEndpoint.products.create()}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user.access_token}`,
-        },
-        body: JSON.stringify(productData)
-      });
-
-      console.log('📡 Response status:', response.status);
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        console.error('❌ API Error:', errorData);
-        
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      const result: CreateProductResponse = await response.json();
-      console.log('✅ Product created successfully:', result);
-
-      setCreatedProduct(result.data);
-
-      toast({
-        title: 'Thành công!',
-        description: `Sản phẩm "${result.data.name}" đã được tạo thành công.`,
-        variant: 'default'
-      });
-
-      // Reset form
-      setFormData({
-        name: '',
-        description: '',
-        price: '',
-        stock: '',
-        category_id: ''
-      });
-      
-    } catch (error: any) {
-      console.error('❌ Create product error:', error);
-      
-      toast({
-        title: 'Lỗi tạo sản phẩm',
-        description: error.message || 'Đã có lỗi xảy ra khi tạo sản phẩm. Vui lòng thử lại.',
-        variant: 'destructive'
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleUploadImages = () => {
-    if (createdProduct) {
-      router.push(`/seller/products/${createdProduct.id}/upload/images`);
-    }
-  };
-
-  const handleViewProduct = () => {
-    if (createdProduct) {
-      router.push(`/seller/products/${createdProduct.id}`);
-    }
-  };
+    // Actions
+    handleInputChange,
+    handleSubmit,
+    handleUploadImages,
+    handleViewProduct,
+    handleBackToList,
+    resetCreatedProduct
+  } = useCreateProduct();
 
   // Nếu đã tạo thành công, hiển thị success screen
   if (createdProduct) {
@@ -276,7 +90,7 @@ export default function CreateProductPage() {
               <Button 
                 variant="outline" 
                 onClick={() => {
-                  setCreatedProduct(null);
+                  resetCreatedProduct();
                   router.push('/seller/products');
                 }}
                 size="lg"
