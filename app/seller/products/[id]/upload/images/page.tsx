@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { useRouter, useParams } from 'next/navigation';
 import { toast } from '@/components/ui/use-toast';
-import { buildEndpoint, API_BASE_URL } from '@/config/api';
+import uploadService, { type UploadResponse, type MultipleUploadResponse } from '@/lib/services/uploadService';
 
 interface ImageItem {
   id: string;
@@ -40,42 +40,7 @@ interface ImageItem {
   original_name?: string;
 }
 
-interface UploadResponse {
-  success: boolean;
-  message: string;
-  data: {
-    url: string;
-    public_id: string;
-    width: number;
-    height: number;
-    file_info?: {
-      original_name: string;
-      size: number;
-      mime_type: string;
-    };
-    product_updated?: boolean;
-    product_id?: number;
-  };
-}
 
-interface MultipleUploadResponse {
-  success: boolean;
-  message: string;
-  data: {
-    uploaded_images: Array<{
-      url: string;
-      public_id: string;
-      width: number;
-      height: number;
-      original_name: string;
-    }>;
-    failed_uploads: string[];
-    total_uploaded: number;
-    total_failed: number;
-    product_updated?: boolean;
-    product_id?: number;
-  };
-}
 
 export default function UploadImagesPage() {
   const router = useRouter();
@@ -93,36 +58,18 @@ export default function UploadImagesPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const maxImages = 10;
-  const allowedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
-  const maxFileSize = 5 * 1024 * 1024; // 5MB
+  const allowedImageTypes = uploadService.getAllowedImageTypes();
+  const maxFileSize = uploadService.getMaxFileSize();
 
   // Delete image from Cloudinary and database
   const deleteImageFromCloudinary = async (publicId: string, imageUrl?: string): Promise<boolean> => {
     try {
-      // Use delete-by-url endpoint if we have the image URL, otherwise use delete endpoint
-      const endpoint = imageUrl 
-        ? `${API_BASE_URL}${buildEndpoint.upload.deleteByUrl()}`
-        : `${API_BASE_URL}${buildEndpoint.upload.delete()}`;
+      if (!user?.access_token) return false;
+      
+      const result = imageUrl 
+        ? await uploadService.deleteImageByUrl(imageUrl, user.access_token)
+        : await uploadService.deleteImage(publicId, user.access_token);
         
-      const body = imageUrl 
-        ? { image_url: imageUrl }
-        : { public_id: publicId };
-
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.access_token}`,
-        },
-        body: JSON.stringify(body)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
       return result.success;
     } catch (error: any) {
       console.error('Delete image error:', error);
@@ -131,23 +78,7 @@ export default function UploadImagesPage() {
   };
 
   // Validate file
-  const validateFile = (file: File): { isValid: boolean; error?: string } => {
-    if (!allowedImageTypes.includes(file.type)) {
-      return {
-        isValid: false,
-        error: `${file.name} không phải là file ảnh hợp lệ (chỉ chấp nhận JPG, PNG, WebP)`
-      };
-    }
-    
-    if (file.size > maxFileSize) {
-      return {
-        isValid: false,
-        error: `${file.name} vượt quá giới hạn ${Math.round(maxFileSize / 1024 / 1024)}MB`
-      };
-    }
-    
-    return { isValid: true };
-  };
+  const validateFile = (file: File) => uploadService.validateFile(file);
 
   // Check authentication
   useEffect(() => {
@@ -173,37 +104,14 @@ export default function UploadImagesPage() {
   }, []);
 
   // Validate URL
-  const isValidImageUrl = (url: string): boolean => {
-    try {
-      const urlObj = new URL(url);
-      const extension = urlObj.pathname.split('.').pop()?.toLowerCase();
-      return ['jpg', 'jpeg', 'png', 'webp'].includes(extension || '');
-    } catch {
-      return false;
-    }
-  };
+  const isValidImageUrl = (url: string): boolean => uploadService.validateImageUrl(url);
 
   // Upload image from URL
   const uploadImageFromUrl = async (imageUrl: string): Promise<UploadResponse | null> => {
+    if (!user?.access_token) throw new Error('No authentication token');
+    
     try {
-      const response = await fetch(`${API_BASE_URL}${buildEndpoint.upload.fromUrl()}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${user?.access_token}`,
-        },
-        body: JSON.stringify({
-          imageUrl: imageUrl,
-          folder: 'shop-nest/products'
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
+      const result = await uploadService.uploadFromUrl(imageUrl, user.access_token, 'shop-nest/products');
       return result;
     } catch (error: any) {
       console.error('Upload from URL error:', error);
@@ -213,27 +121,10 @@ export default function UploadImagesPage() {
 
   // Upload single file
   const uploadSingleFile = async (file: File): Promise<UploadResponse | null> => {
+    if (!user?.access_token) throw new Error('No authentication token');
+    
     try {
-      const formData = new FormData();
-      formData.append('image', file);
-      if (productId && productId !== 'new-product') {
-        formData.append('product_id', productId);
-      }
-
-      const response = await fetch(`${API_BASE_URL}${buildEndpoint.upload.productImage()}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${user?.access_token}`,
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
+      const result = await uploadService.uploadProductImage(file, user.access_token, productId);
       return result;
     } catch (error: any) {
       console.error('Upload file error:', error);
@@ -243,29 +134,10 @@ export default function UploadImagesPage() {
 
   // Upload multiple files
   const uploadMultipleFiles = async (files: File[]): Promise<MultipleUploadResponse | null> => {
+    if (!user?.access_token) throw new Error('No authentication token');
+    
     try {
-      const formData = new FormData();
-      files.forEach(file => {
-        formData.append('images', file);
-      });
-      if (productId && productId !== 'new-product') {
-        formData.append('product_id', productId);
-      }
-
-      const response = await fetch(`${API_BASE_URL}${buildEndpoint.upload.productImages()}`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${user?.access_token}`,
-        },
-        body: formData
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
+      const result = await uploadService.uploadProductImages(files, user.access_token, productId);
       return result;
     } catch (error: any) {
       console.error('Upload multiple files error:', error);
@@ -371,22 +243,12 @@ export default function UploadImagesPage() {
       return;
     }
 
-    // Validate files
-    const validFiles: File[] = [];
-    const invalidFiles: string[] = [];
-
-    Array.from(files).forEach(file => {
-      const validation = validateFile(file);
-      if (validation.isValid) {
-        validFiles.push(file);
-      } else {
-        invalidFiles.push(validation.error!);
-      }
-    });
+    // Validate files using service
+    const { validFiles, invalidFiles } = uploadService.validateFiles(files);
 
     // Show validation errors
     if (invalidFiles.length > 0) {
-      invalidFiles.forEach(error => {
+      invalidFiles.forEach(({ error }) => {
         toast({
           title: "File không hợp lệ",
           description: error,
