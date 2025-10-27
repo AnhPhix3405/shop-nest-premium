@@ -32,7 +32,12 @@ export interface ProductFormData {
 export interface CreateProductResponse {
   success: boolean
   message: string
-  data: Product
+  data: Product | null
+  error?: {
+    status?: number
+    statusText?: string
+    data?: any
+  }
 }
 
 export interface SearchResponse {
@@ -58,14 +63,31 @@ export class ProductService {
 
       const result = await response.json()
 
+      // Nếu response không ok, return error thay vì throw
       if (!response.ok) {
-        throw new Error(result.message || `HTTP error! status: ${response.status}`)
+        return {
+          success: false,
+          message: result.message || `HTTP error! status: ${response.status}`,
+          data: null as any,
+          error: {
+            status: response.status,
+            statusText: response.statusText,
+            data: result
+          }
+        } as any
       }
 
       return result
     } catch (error: any) {
       console.error('Create product error:', error)
-      throw error
+      
+      // Return error thay vì throw
+      return {
+        success: false,
+        message: error.message || 'Network error occurred',
+        data: null as any,
+        error: error
+      } as any
     }
   }
 

@@ -6,7 +6,8 @@ import { useSelector } from 'react-redux';
 import { RootState } from '@/lib/store/types';
 import { toast } from '@/components/ui/use-toast';
 import { ProductService, type Product, type ProductFormData as ServiceProductFormData } from '@/lib/services/productService';
-
+import { logout } from '@/lib/store/authSlice';
+import { useAppDispatch } from '@/lib/hooks/redux';
 // Types for hook
 export interface ProductFormData {
   name: string;
@@ -18,9 +19,11 @@ export interface ProductFormData {
 
 // useCreateProduct Hook
 export const useCreateProduct = () => {
+  const dispatch = useAppDispatch();
+
   const router = useRouter();
   const { user } = useSelector((state: RootState) => state.auth);
-  
+
   // Form state
   const [formData, setFormData] = useState<ProductFormData>({
     name: '',
@@ -53,7 +56,7 @@ export const useCreateProduct = () => {
       ...prev,
       [field]: value
     }));
-    
+
     // Clear error khi user nhập lại
     if (errors[field]) {
       setErrors(prev => ({
@@ -118,12 +121,12 @@ export const useCreateProduct = () => {
   // Submit form
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!checkAuth()) return;
     if (!validateForm()) return;
 
     setIsSubmitting(true);
-    
+
     try {
       // Prepare data for ProductService
       const productData: ServiceProductFormData = {
@@ -138,13 +141,39 @@ export const useCreateProduct = () => {
 
       // Use ProductService instead of direct API call
       const result = await ProductService.createProduct(productData, user!.access_token);
-      
+
+      // Kiểm tra result thay vì dựa vào catch
+      if (!result.success) {
+        // Xử lý lỗi từ service
+        const backendMessage = result.message || 'Đã có lỗi xảy ra khi tạo sản phẩm';
+
+        // Alert đơn giản hiển thị lỗi
+        if (typeof window !== 'undefined') {
+          if (backendMessage === "Access token has expired") {
+            alert('❌ Lỗi: Phiên đăng nhập hết hạn. Vui lòng đăng nhập lại.');
+            // Xử lý logout và redirect
+            dispatch(logout());
+            router.push('/login');
+            return;
+          }
+          alert(`❌ Lỗi: ${backendMessage}`);
+        }
+
+        toast({
+          title: 'Lỗi tạo sản phẩm',
+          description: backendMessage,
+          variant: 'destructive'
+        });
+
+        return;
+      }
+
       console.log('✅ Product created successfully:', result);
-      setCreatedProduct(result.data);
+      setCreatedProduct(result.data!);
 
       toast({
         title: 'Thành công!',
-        description: `Sản phẩm "${result.data.name}" đã được tạo thành công.`,
+        description: `Sản phẩm "${result.data!.name}" đã được tạo thành công.`,
       });
 
       // Reset form
@@ -155,13 +184,20 @@ export const useCreateProduct = () => {
         stock: '',
         category_id: ''
       });
-      
+
     } catch (error: any) {
-      console.error('❌ Create product error:', error);
-      
+      console.error('❌ Unexpected error:', error);
+
+      // Chỉ xử lý các lỗi không dự đoán được (network, parsing, etc.)
+      const errorMessage = 'Lỗi kết nối mạng. Vui lòng thử lại.';
+
+      if (typeof window !== 'undefined') {
+        alert(`❌ Lỗi: ${errorMessage}`);
+      }
+
       toast({
-        title: 'Lỗi tạo sản phẩm',
-        description: error.message || 'Đã có lỗi xảy ra khi tạo sản phẩm. Vui lòng thử lại.',
+        title: 'Lỗi hệ thống',
+        description: errorMessage,
         variant: 'destructive'
       });
     } finally {
@@ -199,7 +235,7 @@ export const useCreateProduct = () => {
     createdProduct,
     categories,
     user,
-    
+
     // Actions
     handleInputChange,
     handleSubmit,
@@ -207,7 +243,7 @@ export const useCreateProduct = () => {
     handleViewProduct,
     handleBackToList,
     resetCreatedProduct,
-    
+
     // Utils
     validateForm,
     checkAuth

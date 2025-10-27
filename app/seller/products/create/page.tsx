@@ -30,8 +30,7 @@ export default function CreateProductPage() {
     handleSubmit,
     handleUploadImages,
     handleViewProduct,
-    handleBackToList,
-    resetCreatedProduct
+    resetCreatedProduct,
   } = useCreateProduct();
 
   // Nếu đã tạo thành công, hiển thị success screen
@@ -113,6 +112,7 @@ export default function CreateProductPage() {
 
   return (
     <div className="container mx-auto p-6 max-w-4xl">
+      
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <Button
